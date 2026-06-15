@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id        BigInt   @id @default(autoincrement())
+  code      String   @unique @map("code") @db.VarChar(50)
+  name      String   @db.VarChar(100)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  users     User[]
+
+  @@map("roles")
+}
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  roleId       BigInt   @map("role_id")
+  name         String   @db.VarChar(100)
+  username     String   @unique @db.VarChar(100)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  role         Role     @relation(fields: [roleId], references: [id])
+
+  createdTransactions      Transaction[]          @relation("CreatedTransactions")
+  changedStatusLogs        TransactionStatusLog[] @relation("ChangedStatusLogs")
+
+  @@map("users")
+}
+
+model Customer {
+  id           BigInt   @id @default(autoincrement())
+  name         String   @db.VarChar(150)
+  phone        String?  @db.VarChar(50)
+  address      String?  @db.Text
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  transactions Transaction[]
+  cylinderLoans CylinderLoan[]
+
+  @@map("customers")
+}
+
+model Product {
+  id                BigInt   @id @default(autoincrement())
+  brand             String   @db.VarChar(100)
+  weightKg          Decimal  @map("weight_kg") @db.Decimal(10, 2)
+  exchangeCostPrice Decimal  @map("exchange_cost_price") @db.Decimal(12, 2)
+  exchangeSalePrice Decimal  @map("exchange_sale_price") @db.Decimal(12, 2)
+  fullTankPrice     Decimal  @map("full_tank_price") @db.Decimal(12, 2)
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  transactionItems  TransactionItem[]
+  inventoryBalance  InventoryBalance?
+  inventoryMovements InventoryMovement[]
+  cylinderLoans     CylinderLoan[]
+
+  @@map("products")
+}
+
+model Transaction {
+  id                      BigInt    @id @default(autoincrement())
+  transactionNo           String    @unique @map("transaction_no") @db.VarChar(50)
+  transactionType         String    @map("transaction_type") @db.VarChar(50)
+  status                  String    @db.VarChar(50)
+  queueDate               DateTime? @map("queue_date") @db.Date
+  queueNo                 Int?      @map("queue_no")
+  customerId              BigInt?   @map("customer_id")
+  customerNameSnapshot    String    @map("customer_name_snapshot") @db.VarChar(150)
+  customerPhoneSnapshot   String?   @map("customer_phone_snapshot") @db.VarChar(50)
+  customerAddressSnapshot String?   @map("customer_address_snapshot") @db.Text
+  totalAmount             Decimal   @default(0) @map("total_amount") @db.Decimal(12, 2)
+  note                    String?   @db.Text
+  createdBy               BigInt    @map("created_by")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+  completedAt             DateTime? @map("completed_at")
+
+  customer           Customer?              @relation(fields: [customerId], references: [id])
+  createdByUser      User                   @relation("CreatedTransactions", fields: [createdBy], references: [id])
+  items              TransactionItem[]
+  statusLogs         TransactionStatusLog[]
+  inventoryMovements InventoryMovement[]
+  cylinderLoans      CylinderLoan[]
+
+  @@unique([queueDate, queueNo], map: "uq_transactions_queue")
+  @@index([createdAt], map: "idx_transactions_created_at")
+  @@index([status], map: "idx_transactions_status")
+  @@index([transactionType], map: "idx_transactions_type")
+  @@index([customerPhoneSnapshot], map: "idx_transactions_customer_phone")
+  @@map("transactions")
+}
+
+model TransactionItem {
+  id                    BigInt  @id @default(autoincrement())
+  transactionId         BigInt  @map("transaction_id")
+  productId             BigInt  @map("product_id")
+  productBrandSnapshot  String  @map("product_brand_snapshot") @db.VarChar(100)
+  productWeightSnapshot Decimal @map("product_weight_snapshot") @db.Decimal(10, 2)
+  quantity              Int
+  unitPrice             Decimal @map("unit_price") @db.Decimal(12, 2)
+  costPrice             Decimal @map("cost_price") @db.Decimal(12, 2)
+  lineTotal             Decimal @map("line_total") @db.Decimal(12, 2)
+  itemAction            String  @map("item_action") @db.VarChar(50)
+  note                  String? @db.Text
+
+  transaction  Transaction    @relation(fields: [transactionId], references: [id])
+  product      Product        @relation(fields: [productId], references: [id])
+  cylinderLoan CylinderLoan?
+
+  @@map("transaction_items")
+}
+
+model TransactionStatusLog {
+  id            BigInt   @id @default(autoincrement())
+  transactionId BigInt   @map("transaction_id")
+  fromStatus    String?  @map("from_status") @db.VarChar(50)
+  toStatus      String   @map("to_status") @db.VarChar(50)
+  changedBy     BigInt   @map("changed_by")
+  changedAt     DateTime @default(now()) @map("changed_at")
+  note          String?  @db.Text
+
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  changedByUser User        @relation("ChangedStatusLogs", fields: [changedBy], references: [id])
+
+  @@map("transaction_status_logs")
+}
+
+model CylinderLoan {
+  id                      BigInt    @id @default(autoincrement())
+  transactionId           BigInt    @map("transaction_id")
+  transactionItemId       BigInt    @unique @map("transaction_item_id")
+  customerId              BigInt?   @map("customer_id")
+  customerNameSnapshot    String    @map("customer_name_snapshot") @db.VarChar(150)
+  customerPhoneSnapshot   String?   @map("customer_phone_snapshot") @db.VarChar(50)
+  customerAddressSnapshot String?   @map("customer_address_snapshot") @db.Text
+  productId               BigInt    @map("product_id")
+  quantity                Int
+  loanStatus              String    @map("loan_status") @db.VarChar(50)
+  borrowedDate            DateTime  @map("borrowed_date") @db.Date
+  expectedReturnDate      DateTime? @map("expected_return_date") @db.Date
+  returnedDate            DateTime? @map("returned_date") @db.Date
+  depositAmount           Decimal   @default(0) @map("deposit_amount") @db.Decimal(12, 2)
+  note                    String?   @db.Text
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  transaction     Transaction     @relation(fields: [transactionId], references: [id])
+  transactionItem TransactionItem @relation(fields: [transactionItemId], references: [id])
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  product         Product         @relation(fields: [productId], references: [id])
+
+  @@index([loanStatus], map: "idx_loans_status")
+  @@map("cylinder_loans")
+}
+
+model InventoryBalance {
+  id        BigInt   @id @default(autoincrement())
+  productId BigInt   @unique @map("product_id")
+  fullQty   Int      @default(0) @map("full_qty")
+  emptyQty  Int      @default(0) @map("empty_qty")
+  loanedQty Int      @default(0) @map("loaned_qty")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("inventory_balances")
+}
+
+model InventoryMovement {
+  id            BigInt   @id @default(autoincrement())
+  productId     BigInt   @map("product_id")
+  transactionId BigInt?  @map("transaction_id")
+  movementType  String   @map("movement_type") @db.VarChar(50)
+  quantity      Int
+  note          String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  product     Product      @relation(fields: [productId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([productId, createdAt], map: "idx_inventory_movements_product_created")
+  @@map("inventory_movements")
+}
