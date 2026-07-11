@@ -1,0 +1,61 @@
+openapi: 3.1.0
+info:
+  title: API Specification
+  version: 0.1.0
+  description: API contract. Replace placeholder metadata before publishing.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+tags: []
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    BigIntId:
+      type: string
+      pattern: '^[1-9][0-9]*$'
+      example: '42'
+    ResponseMeta:
+      type: object
+      required:
+        - requestId
+      properties:
+        requestId:
+          type: string
+          example: req_01JABCDEF1234567890
+    ApiError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Invalid request payload
+        details:
+          type: array
+          items: {}
+          default: []
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+        - meta
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          $ref: '#/components/schemas/ApiError'
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+security:
+  - bearerAuth: []

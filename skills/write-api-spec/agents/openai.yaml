@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write API Spec"
+  short_description: "Create and review precise OpenAPI contracts"
+  default_prompt: "Use $write-api-spec to create or review an OpenAPI specification for this API."
