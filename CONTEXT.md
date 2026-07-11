@@ -19,7 +19,7 @@ MVP เริ่มจากผู้ใช้ role เดียวคือ `AD
 - Dashboard รายวัน
 - Transaction History พร้อม filter/search
 
-ระบบถูกออกแบบเป็น backend API ให้ `KMG-SERVICE-WEB` เรียกใช้งานผ่าน versioned API ใต้ `/api/v1`
+ระบบถูกออกแบบเป็น backend API ให้ `KMG-SERVICE-WEB` เรียกใช้งานผ่าน API ใต้ `/api`
 
 ## 2. Business Logic
 

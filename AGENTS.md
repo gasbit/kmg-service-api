@@ -19,7 +19,7 @@
 
 Layer หลัก:
 
-- Route Layer: กำหนด versioned HTTP endpoints ใต้ `/api/v1`
+- Route Layer: กำหนด HTTP endpoints ใต้ `/api`
 - Controller Layer: อ่าน request data, เรียก services และคืน standard API responses
 - Service Layer: เป็นเจ้าของ business workflows, validation ที่มากกว่า request shape และ database transaction boundaries
 - Repository Layer: รับผิดชอบ database access เท่านั้น ห้ามใส่ business rules ใน layer นี้
@@ -223,7 +223,7 @@ curl http://localhost:4000/api/health
 Auth smoke test:
 
 ```bash
-curl -X POST http://localhost:4000/api/v1/auth/login \
+curl -X POST http://localhost:4000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"admin1234"}'
 ```

@@ -2,7 +2,7 @@
 
 ## Paths and media types
 
-- Put versioned application endpoints below `/api/v1`.
+- Put application endpoints below `/api`. Do not add a version segment unless the project explicitly adopts API versioning later.
 - Use JSON request and response bodies unless file transfer requires another media type.
 - Use plural resource nouns and lower-case kebab-case path segments.
 - Put resource identifiers in path parameters and optional selection controls in query parameters.
@@ -83,4 +83,3 @@ Document filter semantics precisely, including whether multiple filters combine 
 - Do not reuse an input schema as an output schema when server-generated, immutable, sensitive, or snapshot fields differ.
 - Describe money representation explicitly. Match the implementation's string/number serialization and currency assumptions.
 - Distinguish absent properties from properties whose value may be `null`.
-

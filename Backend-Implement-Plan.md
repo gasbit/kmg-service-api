@@ -65,7 +65,7 @@ Legend:
 | ส่วนงาน | สถานะ | หลักฐานจาก code จริง | งานที่ต้องทำต่อ |
 | --- | --- | --- | --- |
 | App bootstrap | `Todo` | ไม่พบ `src/app.ts` หรือ `src/server.ts` | สร้าง app/server, health check และ middleware wiring |
-| Route wiring | `Todo` | ไม่พบ `src/routes.ts` หรือ module route files | สร้าง `/api/v1` และ wire module routes |
+| Route wiring | `Todo` | ไม่พบ `src/routes.ts` หรือ module route files | สร้าง `/api` และ wire module routes |
 | Config/logger/database | `Partial` | มี env validation และ Prisma client แล้ว แต่ยังไม่มี logger และยังไม่ได้ยืนยัน connection กับ PostgreSQL | สร้าง logger และเปิด local PostgreSQL เพื่อทดสอบ connection |
 | Standard response | `Todo` | ไม่พบ response utilities | สร้าง success/error response format และ BigInt serialization |
 | Error handling | `Todo` | ไม่พบ `AppError`, error codes หรือ error middleware | Implement shared error handling และ 404 middleware |
@@ -114,7 +114,7 @@ Legend:
 Base path:
 
 ```text
-/api/v1
+/api
 ```
 
 | Module | Endpoint เป้าหมาย | สถานะปัจจุบัน |

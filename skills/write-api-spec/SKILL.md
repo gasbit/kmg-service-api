@@ -21,7 +21,7 @@ Create API contracts precise enough for frontend implementation, backend impleme
 2. Inspect the available sources of truth: requirements, architecture documents, existing OpenAPI files, routes, Zod schemas, controllers, services, repositories, Prisma schema, constants, error codes, and tests.
 3. Resolve conflicts using this priority: explicit user requirement; approved domain documentation; current tested behavior; current implementation; inferred convention. Report every conflict that affects the contract.
 4. Identify consequential unresolved decisions. Do not silently invent authorization, state transitions, stock effects, idempotency, pagination, filtering, nullability, or destructive behavior. Ask only when the missing decision materially changes the public contract; otherwise make and report a conservative assumption.
-5. Design each operation before writing YAML: method and versioned path; stable `operationId`; authentication and authorization; parameters and request body; success and error responses; reusable schemas; realistic examples; observable side effects; invariants.
+5. Design each operation before writing YAML: method and path; stable `operationId`; authentication and authorization; parameters and request body; success and error responses; reusable schemas; realistic examples; observable side effects; invariants.
 6. Write OpenAPI 3.1-compatible YAML. Reuse schemas, parameters, responses, and security schemes under `components` when doing so reduces duplication without hiding important behavior.
 7. Validate the result against implementation sources and `references/review-checklist.md`. Run a repository-provided OpenAPI validator when available.
 8. Report changed files, assumptions, unresolved decisions, implementation mismatches, and breaking-change concerns.
@@ -50,4 +50,3 @@ Classify findings as:
 - Minor: ambiguity, weak example, naming inconsistency, or maintainability issue.
 
 Reference the file and operation for every finding. Lead with findings, then list assumptions and open questions. Do not modify implementation during a review unless explicitly asked.
-
