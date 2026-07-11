@@ -1,37 +1,37 @@
 # AGENTS.md
 
-## 1. Project Overview
+## 1. ภาพรวมโปรเจกต์
 
-KMG-SERVICE-API is the backend service for KMG-SERVICE, a gas shop management system for store owners. The MVP supports admin login, product management, transaction creation, delivery queue management, cylinder loan tracking, inventory tracking, transaction history, and daily dashboard summaries.
+`KMG-SERVICE-API` คือ backend service ของ `KMG-SERVICE` ระบบจัดการร้านแก๊สสำหรับเจ้าของร้าน MVP รองรับ admin login, product management, transaction creation, delivery queue management, cylinder loan tracking, inventory tracking, transaction history และ daily dashboard summaries
 
-The system starts with a single `ADMIN` role but must remain ready for future roles such as `STAFF`, `RIDER`, and `ACCOUNTANT`.
+ระบบเริ่มจาก role เดียวคือ `ADMIN` แต่ต้องเตรียมโครงสร้างให้รองรับ role ในอนาคต เช่น `STAFF`, `RIDER` และ `ACCOUNTANT`
 
-Primary goals:
+เป้าหมายหลัก:
 
-- Keep transaction history accurate even when master data changes later.
-- Track stock through balances and movements, not direct silent edits.
-- Support multiple gas transaction types in one consistent workflow.
-- Keep the backend simple enough for MVP delivery while preserving clear module boundaries.
+- เก็บ transaction history ให้ถูกต้อง แม้ master data จะเปลี่ยนภายหลัง
+- ติดตาม stock ผ่าน balances และ movements ไม่ใช่แก้ยอดเงียบ ๆ
+- รองรับ transaction หลายประเภทของร้านแก๊สด้วย workflow ที่สอดคล้องกัน
+- ทำ backend ให้เรียบง่ายพอสำหรับ MVP แต่ยังมี module boundaries ชัดเจน
 
-## 2. Architecture Overview
+## 2. ภาพรวมสถาปัตยกรรม
 
-Use a Modular Monolith architecture with Node.js, Express, TypeScript, Prisma, PostgreSQL, Zod, JWT, bcrypt, and Pino.
+ใช้ Modular Monolith architecture ด้วย Node.js, Express, TypeScript, Prisma, PostgreSQL, Zod, JWT, bcrypt และ Pino
 
-Main layers:
+Layer หลัก:
 
-- Route Layer: defines versioned HTTP endpoints under `/api/v1`.
-- Controller Layer: reads request data, calls services, and returns standard API responses.
-- Service Layer: owns business workflows, validation beyond request shape, and database transaction boundaries.
-- Repository Layer: owns database access only. Do not put business rules here.
+- Route Layer: กำหนด versioned HTTP endpoints ใต้ `/api/v1`
+- Controller Layer: อ่าน request data, เรียก services และคืน standard API responses
+- Service Layer: เป็นเจ้าของ business workflows, validation ที่มากกว่า request shape และ database transaction boundaries
+- Repository Layer: รับผิดชอบ database access เท่านั้น ห้ามใส่ business rules ใน layer นี้
 
-Important architecture rules:
+กฎสถาปัตยกรรมสำคัญ:
 
-- Business workflows that touch multiple tables must run inside `prisma.$transaction`.
-- `TransactionService` is the owner of transaction creation, status changes, queue effects, inventory effects, and loan effects.
-- `DashboardService` should stay read-only.
-- Queue data is stored on `transactions.queue_date` and `transactions.queue_no`; do not create a separate queue table for MVP.
+- Business workflows ที่แตะหลาย table ต้องรันใน `prisma.$transaction`
+- `TransactionService` เป็นเจ้าของ transaction creation, status changes, queue effects, inventory effects และ loan effects
+- `DashboardService` ต้องเป็น read-only
+- Queue data เก็บบน `transactions.queue_date` และ `transactions.queue_no`; MVP ไม่ต้องสร้าง queue table แยก
 
-## 3. Project Structure
+## 3. โครงสร้างโปรเจกต์
 
 ```text
 KMG-SERVICE-API/
@@ -74,26 +74,26 @@ KMG-SERVICE-API/
     tests/
 ```
 
-Module file convention:
+Convention ของ module files:
 
-- `*.routes.ts`: Express routes and middleware wiring.
-- `*.controller.ts`: HTTP request/response handling only.
-- `*.schema.ts`: Zod request schemas and input types.
-- `*.service.ts`: application/business logic.
-- `*.repository.ts`: Prisma queries only.
-- `*.types.ts`: module-specific TypeScript types.
+- `*.routes.ts`: Express routes และ middleware wiring
+- `*.controller.ts`: จัดการ HTTP request/response เท่านั้น
+- `*.schema.ts`: Zod request schemas และ input types
+- `*.service.ts`: application/business logic
+- `*.repository.ts`: Prisma queries เท่านั้น
+- `*.types.ts`: TypeScript types เฉพาะ module
 
-## 4. Coding Standards
+## 4. มาตรฐานการเขียน Code
 
-- Use TypeScript strict mode.
-- Keep controllers thin. They should not contain business rules.
-- Validate request payloads with Zod and the shared `validate` middleware.
-- Throw `AppError` for operational errors.
-- Use shared error codes from `src/shared/errors/error-codes.ts`.
-- Use constants for domain codes instead of hard-coded strings.
-- Never return `passwordHash` from API responses.
-- Do not log passwords, tokens, or sensitive customer data.
-- Keep API responses in the standard format:
+- ใช้ TypeScript strict mode
+- Controllers ต้องบางและไม่ใส่ business rules
+- Validate request payloads ด้วย Zod และ shared `validate` middleware
+- Throw `AppError` สำหรับ operational errors
+- ใช้ shared error codes จาก `src/shared/errors/error-codes.ts`
+- ใช้ constants สำหรับ domain codes แทน hard-coded strings
+- ห้ามคืน `passwordHash` จาก API responses
+- ห้าม log passwords, tokens หรือ sensitive customer data
+- API responses ต้องอยู่ใน standard format:
 
 ```json
 {
@@ -105,7 +105,7 @@ Module file convention:
 }
 ```
 
-Error responses must use:
+Error responses ต้องใช้:
 
 ```json
 {
@@ -121,52 +121,52 @@ Error responses must use:
 }
 ```
 
-Prisma and ID handling:
+Prisma และ ID handling:
 
-- Database IDs are `BigInt`.
-- JWT/user payload IDs are strings to avoid JSON serialization issues.
-- Use shared utilities for ID conversion and API serialization.
+- Database IDs เป็น `BigInt`
+- JWT/user payload IDs ใช้ string เพื่อเลี่ยง JSON serialization issues
+- ใช้ shared utilities สำหรับ ID conversion และ API serialization
 
-## 5. Development Workflow
+## 5. Workflow การพัฒนา
 
-Recommended workflow:
+Workflow ที่แนะนำ:
 
-1. Read relevant documents before changing business logic:
+1. อ่านเอกสารที่เกี่ยวข้องก่อนแก้ business logic:
    - `../Context.md`
    - `../Backend-Architecture.md`
    - `../Database-Design.md`
-2. Locate the owning module before editing.
-3. Add or update Zod schemas for request changes.
-4. Put workflow logic in the service layer.
-5. Put database access in repositories.
-6. Use Prisma transactions for multi-table writes.
-7. Run validation/build commands before finishing.
+2. หา owning module ให้เจอก่อนแก้ไฟล์
+3. เพิ่มหรืออัปเดต Zod schemas เมื่อ request เปลี่ยน
+4. วาง workflow logic ไว้ใน service layer
+5. วาง database access ไว้ใน repositories
+6. ใช้ Prisma transactions สำหรับ multi-table writes
+7. รัน validation/build commands ก่อนจบงาน
 
-For new endpoint work:
+สำหรับ endpoint ใหม่:
 
-1. Add schema in `*.schema.ts`.
-2. Add service method.
-3. Add repository method if database access is needed.
-4. Add controller function.
-5. Wire route in `*.routes.ts`.
-6. Add or update tests when behavior is non-trivial.
+1. เพิ่ม schema ใน `*.schema.ts`
+2. เพิ่ม service method
+3. เพิ่ม repository method ถ้าต้อง access database
+4. เพิ่ม controller function
+5. Wire route ใน `*.routes.ts`
+6. เพิ่มหรืออัปเดต tests เมื่อ behavior มีความซับซ้อน
 
-For database changes:
+สำหรับ database changes:
 
-1. Update `src/database/prisma/schema.prisma`.
-2. Run Prisma migration.
-3. Update repositories/services impacted by generated Prisma types.
-4. Run Prisma generate and build.
+1. อัปเดต `src/database/prisma/schema.prisma`
+2. รัน Prisma migration
+3. อัปเดต repositories/services ที่กระทบจาก generated Prisma types
+4. รัน Prisma generate และ build
 
 ## 6. Commands
 
-Install dependencies:
+ติดตั้ง dependencies:
 
 ```bash
 npm install
 ```
 
-Create local env:
+สร้าง local env:
 
 ```bash
 cp .env.example .env
@@ -228,42 +228,42 @@ curl -X POST http://localhost:4000/api/v1/auth/login \
   -d '{"username":"admin","password":"admin1234"}'
 ```
 
-## 7. Safety Rules
+## 7. กฎความปลอดภัย (Safety Rules)
 
-- Do not bypass the service layer for transaction, inventory, queue, or loan workflows.
-- Do not update inventory balances without creating inventory movements.
-- Do not delete products physically; use soft delete through `isActive = false`.
-- Do not mutate completed or cancelled transactions except through explicit future business rules.
-- Do not change transaction status without inserting a status log.
-- Do not cut stock for `DELIVERY_EXCHANGE` at creation time; cut stock only when completed.
-- Do not create queue numbers outside a database transaction.
-- Do not expose password hashes, JWT secrets, or `.env` values.
-- Do not commit generated or local-only artifacts unless intentionally requested:
+- ห้าม bypass service layer สำหรับ transaction, inventory, queue หรือ loan workflows
+- ห้าม update inventory balances โดยไม่สร้าง inventory movements
+- ห้ามลบ products จริงจาก database; ให้ใช้ soft delete ผ่าน `isActive = false`
+- ห้าม mutate completed หรือ cancelled transactions ยกเว้น future business rules ที่ระบุชัด
+- ห้ามเปลี่ยน transaction status โดยไม่ insert status log
+- ห้ามตัด stock สำหรับ `DELIVERY_EXCHANGE` ตอนสร้างรายการ ให้ตัด stock เฉพาะเมื่อ completed
+- ห้ามสร้าง queue numbers นอก database transaction
+- ห้าม expose password hashes, JWT secrets หรือ `.env` values
+- ห้าม commit generated หรือ local-only artifacts เว้นแต่ผู้ใช้ขอชัดเจน:
   - `node_modules/`
   - `dist/`
   - `.env`
   - `.DS_Store`
-- Avoid broad refactors while implementing a specific feature.
-- If existing files contain user changes, preserve them and work around them carefully.
+- หลีกเลี่ยง broad refactors ระหว่าง implement feature เฉพาะจุด
+- ถ้าไฟล์เดิมมี user changes ต้อง preserve changes เหล่านั้นและทำงานรอบ ๆ อย่างระมัดระวัง
 
-## 8. Domain Knowledge
+## 8. ความรู้ Domain (Domain Knowledge)
 
-Transaction types:
+ประเภท Transaction:
 
-- `DELIVERY_EXCHANGE`: customer orders delivery gas exchange.
-- `WALK_IN_EXCHANGE`: customer exchanges cylinder at the shop.
-- `BORROW_CYLINDER`: customer borrows a cylinder.
-- `RETURN_CYLINDER`: customer returns a borrowed cylinder.
-- `BUY_FULL_TANK`: customer buys a full/new tank.
+- `DELIVERY_EXCHANGE`: ลูกค้าสั่งส่งแก๊สเพื่อแลกถัง
+- `WALK_IN_EXCHANGE`: ลูกค้ามาแลกถังที่หน้าร้าน
+- `BORROW_CYLINDER`: ลูกค้ายืมถัง
+- `RETURN_CYLINDER`: ลูกค้าคืนถังที่ยืม
+- `BUY_FULL_TANK`: ลูกค้าซื้อถังเต็มหรือถังใหม่
 
-Transaction statuses:
+สถานะ Transaction:
 
 - `PENDING`
 - `IN_PROGRESS`
 - `COMPLETED`
 - `CANCELLED`
 
-Status flow:
+Flow สถานะ:
 
 ```text
 PENDING -> IN_PROGRESS -> COMPLETED
@@ -271,45 +271,45 @@ PENDING -> CANCELLED
 IN_PROGRESS -> CANCELLED
 ```
 
-Final states:
+สถานะสุดท้าย:
 
 - `COMPLETED`
 - `CANCELLED`
 
-Inventory movement rules:
+กฎ Inventory movement:
 
 - `FULL_OUT`: `fullQty -= quantity`
 - `EMPTY_IN`: `emptyQty += quantity`
 - `LOAN_OUT`: `fullQty -= quantity`, `loanedQty += quantity`
 - `LOAN_RETURN`: `loanedQty -= quantity`, `emptyQty += quantity`
-- `ADJUSTMENT`: manual admin adjustment with required note
+- `ADJUSTMENT`: manual admin adjustment พร้อม note บังคับ
 
-Transaction behavior:
+พฤติกรรมของ Transaction:
 
 - `DELIVERY_EXCHANGE`
   - Default status: `PENDING`
-  - Creates queue number for today.
-  - Does not update stock until status becomes `COMPLETED`.
+  - สร้าง queue number ของวันนี้
+  - ไม่ update stock จนกว่า status จะเป็น `COMPLETED`
 - `WALK_IN_EXCHANGE`
   - Default status: `COMPLETED`
-  - Immediately creates `FULL_OUT` and `EMPTY_IN` movements.
+  - สร้าง `FULL_OUT` และ `EMPTY_IN` movements ทันที
 - `BORROW_CYLINDER`
   - Default status: `COMPLETED`
-  - Immediately creates `LOAN_OUT` movement and a cylinder loan.
+  - สร้าง `LOAN_OUT` movement และ cylinder loan ทันที
 - `RETURN_CYLINDER`
   - Default status: `COMPLETED`
-  - Immediately creates `LOAN_RETURN` movement.
+  - สร้าง `LOAN_RETURN` movement ทันที
 - `BUY_FULL_TANK`
   - Default status: `COMPLETED`
-  - Immediately creates `FULL_OUT` movement.
+  - สร้าง `FULL_OUT` movement ทันที
 
-Snapshot rules:
+กฎ Snapshot:
 
-- Transactions must store customer snapshot fields.
-- Transaction items must store product brand, weight, unit price, cost price, and line total snapshots.
-- Historical records must remain correct even if products or customers change later.
+- Transactions ต้องเก็บ customer snapshot fields
+- Transaction items ต้องเก็บ product brand, weight, unit price, cost price และ line total snapshots
+- Historical records ต้องถูกต้องอยู่เสมอ แม้ products หรือ customers จะเปลี่ยนภายหลัง
 
-Loan statuses:
+สถานะ Loan:
 
 - `BORROWED`
 - `PARTIAL_RETURNED`
@@ -317,7 +317,7 @@ Loan statuses:
 - `OVERDUE`
 - `CANCELLED`
 
-MVP access control:
+Access control ของ MVP:
 
-- `ADMIN` can access all current modules.
-- Keep role middleware generic so future roles can be added without rewriting route structure.
+- `ADMIN` เข้าถึง current modules ได้ทั้งหมด
+- Role middleware ต้อง generic เพื่อเพิ่ม future roles ได้โดยไม่ต้อง rewrite route structure

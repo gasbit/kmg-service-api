@@ -11,7 +11,6 @@ export function validate(schema: AnyZodObject) {
 
     req.body = parsed.body ?? req.body;
     req.params = parsed.params ?? req.params;
-    req.query = parsed.query ?? req.query;
     next();
   };
 }
