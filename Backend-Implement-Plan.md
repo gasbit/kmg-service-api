@@ -13,7 +13,7 @@
 
 ## 1. Checklist ภาพรวมจาก Code จริง
 
-ตรวจล่าสุดจาก source code ใน `KMG-SERVICE-API/src` พบว่า backend มี implementation หลักหลายส่วนแล้ว โดยเฉพาะ foundation, Prisma schema, auth, products, transaction core, queue, inventory และ dashboard แต่ยังมีจุดที่ต้อง harden และบาง workflow ยัง incomplete โดยเฉพาะ loan return lifecycle, tests, API docs และ verification commands
+ตรวจล่าสุดจาก source code ใน `KMG-SERVICE-API/src` บน branch `feature/authentication` ที่ commit `d0e9b5d` พบว่าเหลือเพียง directory skeleton และ `src/tests/.gitkeep` โดย implementation เดิม, Prisma schema, migration และ seed ถูกลบใน reset commit ปัจจุบันทุก phase จึงกลับเป็น `Todo` จนกว่าจะมี code และผ่าน verification ที่เกี่ยวข้อง
 
 Legend:
 
@@ -22,38 +22,41 @@ Legend:
 - `Todo`: ยังไม่มี implementation ที่ใช้งานได้
 - `Not verified`: ยังไม่ได้ยืนยันด้วยการรัน command หรือ integration test ล่าสุด
 
-- [x] Phase 0: โครง backend และ route wiring
-  สถานะ: `Done` - มี `app.ts`, `routes.ts`, `/api/v1`, health check และ module routes ครบ
-- [x] Phase 1: Foundation, middleware และ response/error format
-  สถานะ: `Done` - มี request id, pino-http, helmet, cors, validate middleware, auth/role middleware, `AppError`, error middleware และ `sendSuccess`; แก้ validate middleware ให้ compatible กับ Express 5 แล้ว
-- [x] Phase 2: Database schema, migration และ seed
-  สถานะ: `Done` - มี Prisma schema ครบตาม domain หลัก, migration และ seed admin
-- [x] Phase 3: Auth และ role base
-  สถานะ: `Done` - มี login, `/auth/me`, bcrypt, JWT, active user check และ role middleware; HTTP smoke test `POST /api/v1/auth/login` ผ่านด้วย user `admin_kmg`
+- [ ] Phase 0: โครง backend และ route wiring
+  สถานะ: `Todo` - ยังไม่มี `app.ts`, `server.ts`, `routes.ts`, health check หรือ module routes
+- [ ] Phase 1: Foundation, middleware และ response/error format
+  สถานะ: `Todo` - directory มีอยู่ แต่ยังไม่มีไฟล์ config, middleware, shared errors หรือ response utilities
+- [ ] Phase 2: Database schema, migration และ seed
+  สถานะ: `Todo` - มี `DATABASE_URL` key ใน env แต่ไม่มี Prisma schema, migration SQL หรือ seed; `prisma validate` ไม่ผ่าน
+- [ ] Phase 3: Auth และ role base
+  สถานะ: `Todo` - ยังไม่มี auth source code, route, middleware หรือ smoke test ที่รันได้
 - [ ] Phase 4: Product management
-  สถานะ: `Partial` - Product CRUD และ initial inventory balance มีแล้ว แต่ product image storage/upload ยังไม่มี
+  สถานะ: `Todo` - ยังไม่มี Product module, CRUD, inventory initialization หรือ product image implementation
 - [ ] Phase 5: Transaction core
-  สถานะ: `Partial` - create/list/detail/status/cancel มีแล้ว แต่ต้อง harden validation, queue concurrency และ loan return effects
+  สถานะ: `Todo` - ยังไม่มี Transaction module หรือ workflow implementation
 - [ ] Phase 6: Queue workflow
-  สถานะ: `Partial` - มี today/by-date queue และ status update ผ่าน `TransactionService` แต่ต้องเพิ่ม validation/filter และ test status effects
+  สถานะ: `Todo` - ยังไม่มี Queue module, route หรือ service
 - [ ] Phase 7: Cylinder loan workflow
-  สถานะ: `Partial` - มี list/active/detail/return endpoint แต่ return loan ยังสร้าง `RETURN_CYLINDER` transaction โดยยังไม่ update loan status/returned quantity/returned date ให้ครบ
+  สถานะ: `Todo` - ยังไม่มี Loan module หรือ loan return lifecycle
 - [ ] Phase 8: Inventory workflow
-  สถานะ: `Partial` - มี balances, movements, adjustment และ apply movements แต่ควร harden atomic update/locking และ adjustment movement semantics
-- [x] Phase 9: Dashboard read aggregation
-  สถานะ: `Done` - มี `/dashboard/today` แบบ read-only aggregate
+  สถานะ: `Todo` - ยังไม่มี Inventory module, balances หรือ movements implementation
+- [ ] Phase 9: Dashboard read aggregation
+  สถานะ: `Todo` - ยังไม่มี Dashboard module หรือ endpoint
 - [ ] Phase 10: Tests, OpenAPI และ hardening
-  สถานะ: `Partial` - `npm run build` ผ่านล่าสุดแล้ว แต่ `npm run lint` ยังติดเพราะไม่มี ESLint v9 flat config, ยังไม่พบ test files และยังไม่มี OpenAPI docs
+  สถานะ: `Todo` - build ไม่ผ่านเพราะไม่มี TypeScript inputs; ยังไม่มี test files, ESLint v9 flat config หรือ OpenAPI docs
 
 งานถัดไปที่ควรเริ่มก่อน:
 
+- [ ] สร้าง application foundation (`app.ts`, `server.ts`, routes, config, middleware และ shared utilities)
+- [ ] สร้าง Prisma schema, initial migration และ seed ใหม่
+- [ ] Implement auth และ role base ก่อน business modules
 - [ ] ปิด gap ของ `returnLoan`: อัปเดต `cylinder_loans.loan_status`, `returned_date` และรองรับ partial return ให้ถูกต้อง
 - [ ] เพิ่ม test สำคัญของ `TransactionService`: create transaction, status transition, delivery complete ตัด stock, invalid transition, insufficient stock
 - [ ] เพิ่ม test ของ loan return และ inventory movement
 - [ ] Harden queue number generation ด้วย DB transaction/unique constraint retry หรือ conflict handling
 - [ ] ตรวจ `adjustInventory` ว่า movement quantity/note สื่อความหมายพอสำหรับ delta หลาย field หรือควรแยก movement ต่อ balance type
 - [ ] เพิ่ม OpenAPI/Swagger หรืออย่างน้อย endpoint contract สำหรับ frontend
-- [x] รัน `npm run build` หลังแก้ validate middleware
+- [ ] ทำให้ `npm run build` ผ่านหลังมี TypeScript source files
 - [ ] เพิ่ม/แก้ ESLint config ของ API ให้รองรับ ESLint v9 แล้วรัน `npm run lint`
 - [ ] รัน `npm test`, `npm run prisma:generate` หลังแก้ logic สำคัญ
 
@@ -61,34 +64,34 @@ Legend:
 
 | ส่วนงาน | สถานะ | หลักฐานจาก code จริง | งานที่ต้องทำต่อ |
 | --- | --- | --- | --- |
-| App bootstrap | `Done` | `src/app.ts` ใช้ request id, pino, helmet, cors, json limit, `/api/health`, `/api/v1` routes และ error middleware | เพิ่ม 404 handler ถ้าต้องการ response format กลางสำหรับ unknown route |
-| Route wiring | `Done` | `src/routes.ts` wire auth, products, transactions, queues, loans, inventory, dashboard | ตรวจ path naming ให้ตรง frontend contract เช่น `/loans` vs `/cylinder-loans` |
-| Config/logger/database | `Done` | มี `env.ts`, `database.ts`, `logger.ts` | ตรวจ env validation ให้ครบ production requirement |
-| Standard response | `Done` | `sendSuccess()` serialize bigint/date และใส่ `requestId` | เพิ่ม helper สำหรับ pagination meta ถ้าต้องการ format เดียวกันทุก list |
-| Error handling | `Done` | `AppError`, `ERROR_CODES`, `errorMiddleware` รองรับ Zod/AppError/unexpected | เพิ่ม 404 middleware และ sanitize details สำหรับ production ถ้าจำเป็น |
-| Auth middleware | `Done` | `authMiddleware` verify Bearer token และ set `req.user` | เพิ่ม token expiry/refresh strategy ในอนาคตถ้าต้องการ |
-| Role middleware | `Done` | `roleMiddleware([ROLE_CODES.ADMIN])` ใช้กับ protected modules | เพิ่ม tests สำหรับ forbidden/unauthorized |
-| Prisma schema | `Done` | `schema.prisma` มี roles, users, customers, products, transactions, transaction_items, status_logs, cylinder_loans, inventory_balances, inventory_movements | พิจารณาเพิ่ม fields สำหรับ partial return tracking ถ้า business ต้องรู้จำนวนคืนสะสม |
-| Migration | `Done` | มี `src/database/prisma/migrations/20260614151320_init/migration.sql` | รัน migration ใน environment จริงและตรวจ index/constraint |
-| Seed | `Done` | `seed.ts` upsert `ADMIN` role และ admin user พร้อม bcrypt | เพิ่ม seed master constants เฉพาะที่ต้องใช้ถ้ามี table แยกในอนาคต |
-| Auth module | `Done` | `POST /auth/login`, `GET /auth/me`, bcrypt compare, JWT sign, active user check; HTTP smoke test login ผ่านหลังแก้ validate middleware | เพิ่ม integration tests |
-| Product module | `Done` | CRUD, soft delete, list pagination/search, create product พร้อม `inventoryBalance.create` | เพิ่ม validation กัน update inactive product หาก business ต้องการ |
+| App bootstrap | `Todo` | ไม่พบ `src/app.ts` หรือ `src/server.ts` | สร้าง app/server, health check และ middleware wiring |
+| Route wiring | `Todo` | ไม่พบ `src/routes.ts` หรือ module route files | สร้าง `/api/v1` และ wire module routes |
+| Config/logger/database | `Todo` | มี env keys แต่ไม่พบ `env.ts`, `database.ts`, `logger.ts` | สร้าง config validation, logger และ Prisma client |
+| Standard response | `Todo` | ไม่พบ response utilities | สร้าง success/error response format และ BigInt serialization |
+| Error handling | `Todo` | ไม่พบ `AppError`, error codes หรือ error middleware | Implement shared error handling และ 404 middleware |
+| Auth middleware | `Todo` | ไม่พบ auth middleware | Implement Bearer token verification และ tests |
+| Role middleware | `Todo` | ไม่พบ role middleware/constants | Implement role guard และ tests |
+| Prisma schema | `Todo` | ไม่พบ `src/database/prisma/schema.prisma`; Prisma validate ไม่ผ่าน | สร้าง schema ตาม domain และตรวจด้วย Prisma |
+| Migration | `Todo` | migration directory ว่าง ไม่มี `migration.sql` | สร้าง initial migration และตรวจ constraints/indexes |
+| Seed | `Todo` | ไม่พบ `src/database/seeds/seed.ts` | สร้าง ADMIN role/admin user seed |
+| Auth module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement login, current user, bcrypt และ JWT |
+| Product module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement CRUD, soft delete, pagination และ initial balance |
 | Product images | `Todo` | ยังไม่มี image model, storage adapter, upload/delete endpoint หรือ static local storage route | เพิ่ม `ProductImage`, local storage adapter และ API contract ที่รองรับการเปลี่ยนเป็น object storage |
-| Transaction list/detail | `Partial` | มี list/detail พร้อม pagination/filter type/status/customerPhone | เพิ่ม filter date/customer name/transaction no ถ้าต้องตรง planning เต็ม |
-| Transaction create | `Partial` | สร้าง header/items/status log/snapshot/queue/default status และ completed effects | เพิ่ม validation mapping transaction type กับ item action, expected return date เฉพาะ borrow, duplicate product rules ถ้าจำเป็น |
-| Transaction status change | `Partial` | ใช้ `VALID_STATUS_TRANSITIONS`, insert status log, completed delivery แล้วสร้าง stock movements | เพิ่ม test กัน complete ซ้ำ, cancel final state, insufficient stock ตอน complete |
-| Queue number | `Partial` | ใช้ `nextQueueNo()` ใน DB transaction และมี unique `[queueDate, queueNo]` | เพิ่ม conflict retry/handling เมื่อ concurrent insert ชน unique constraint |
-| Cancel transaction | `Partial` | `cancel()` เรียก `changeStatus(...CANCELLED)` | ตรวจ behavior ถ้า cancel transaction ที่ completed/cancelled แล้วให้ error ตาม rule |
-| Inventory movements | `Partial` | `applyMovements()` validate balance ไม่ติดลบ และสร้าง movement | พิจารณา atomic update หรือ row lock เพื่อกัน race condition |
-| Inventory adjustment | `Partial` | มี adjustment endpoint พร้อม note required และ validate negative | ทบทวน movement `quantity` ที่รวม delta หลาย field อาจไม่ชัดเจนพอใน audit |
-| Queue module | `Partial` | มี `/queues/today`, `/queues?date=...`, `/queues/:transactionId/status` | เพิ่ม schema validate ให้ `/today` รองรับ date query ถ้าต้องการ และ test status update |
-| Loan list/detail | `Partial` | มี list/active/detail พร้อม status filter | เพิ่ม search/filter customer/date ถ้าต้องการตาม planning |
-| Loan return | `Partial` | `returnLoan()` สร้าง `RETURN_CYLINDER` transaction ผ่าน `TransactionService` | ต้อง update loan status, returned date, partial return state และ validate remaining quantity จริง |
-| Dashboard | `Done` | `/dashboard/today` aggregate status, sales, queue, product prices, active loans, stock | เพิ่ม tests และตรวจ timezone/date boundary |
-| Users module | `Partial` | มี `user.repository.ts`, `user.service.ts` แต่ยังไม่มี routes | ถ้า MVP ต้องมี User Management ตาม docs ให้เพิ่ม endpoints หรือย้ายไป future scope |
+| Transaction list/detail | `Todo` | ไม่พบ transaction source files | Implement list/detail และ filters ตาม contract |
+| Transaction create | `Todo` | ไม่พบ TransactionService หรือ repository | Implement workflow, snapshots, status log, queue และ effects |
+| Transaction status change | `Todo` | ไม่พบ status constants/service/log implementation | Implement transitions, logs และ completed effects |
+| Queue number | `Todo` | ไม่มี schema หรือ queue generation code | Implement ภายใน DB transaction พร้อม unique/conflict handling |
+| Cancel transaction | `Todo` | ไม่มี transaction service | Implement ผ่าน status transition rule เดียวกัน |
+| Inventory movements | `Todo` | ไม่พบ inventory source files | Implement balances, movements และ negative-stock protection |
+| Inventory adjustment | `Todo` | ไม่มี adjustment endpoint/service | Implement adjustment พร้อม note และ audit semantics |
+| Queue module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement queue read/status endpoints |
+| Loan list/detail | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement list/active/detail และ filters |
+| Loan return | `Todo` | ไม่มี loan return workflow | Implement partial/full return และ transaction/inventory effects |
+| Dashboard | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement read-only daily aggregation |
+| Users module | `Todo` | directory มีอยู่แต่ไม่มี source files | ตัดสินใจ MVP scope แล้ว implement หรือระบุ future scope |
 | Tests | `Todo` | ไม่พบ `*.test.ts` หรือ `*.spec.ts` ใน `src` | เพิ่ม unit/integration tests สำหรับ business-critical services |
 | API docs | `Todo` | ยังไม่พบ OpenAPI/Swagger setup | เพิ่ม OpenAPI docs หรือ contract markdown สำหรับ frontend |
-| Build/test verification | `Partial` | `npm run build` ผ่านล่าสุด; `npm run lint` ยังรันไม่ได้เพราะไม่มี `eslint.config.*` สำหรับ ESLint v9 | เพิ่ม ESLint config, รัน `npm test`, `npm run prisma:generate` หลัง implement |
+| Build/test verification | `Todo` | `npm run build` ไม่ผ่านด้วย TS18003 เพราะไม่มี TypeScript inputs; Prisma validate ไม่ผ่าน | Implement source/schema, เพิ่ม ESLint config แล้วรัน verification ทั้งหมด |
 
 ## 3. หลักการดำเนินงาน
 
@@ -114,19 +117,19 @@ Base path:
 /api/v1
 ```
 
-| Module | Endpoint ปัจจุบัน | สถานะ |
+| Module | Endpoint เป้าหมาย | สถานะปัจจุบัน |
 | --- | --- | --- |
-| Health | `GET /api/health` | `Done` |
-| Auth | `POST /auth/login`, `GET /auth/me` | `Done` |
-| Products | `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | `Partial` - เพิ่ม image data ใน response และ image lifecycle endpoints |
+| Health | `GET /api/health` | `Todo` - ยังไม่มี app/route |
+| Auth | `POST /auth/login`, `GET /auth/me` | `Todo` - ยังไม่มี module/route |
+| Products | `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | `Todo` - ยังไม่มี module/route |
 | Product images | `POST /products/:id/images`, `GET /products/:id/images`, `PATCH /products/:id/images/:imageId`, `DELETE /products/:id/images/:imageId` | `Todo` - MVP ใช้ local storage; ภายหลังเปลี่ยน implementation เป็น object storage |
-| Transactions | `GET /transactions`, `GET /transactions/:id`, `POST /transactions`, `PATCH /transactions/:id/status`, `POST /transactions/:id/cancel` | `Partial` |
-| Queues | `GET /queues/today`, `GET /queues?date=...`, `PATCH /queues/:transactionId/status` | `Partial` |
-| Loans | `GET /loans`, `GET /loans/active`, `GET /loans/:id`, `POST /loans/:id/return` | `Partial` |
-| Inventory | `GET /inventory/balances`, `GET /inventory/movements`, `POST /inventory/adjustments` | `Partial` |
-| Dashboard | `GET /dashboard/today` | `Done` |
+| Transactions | `GET /transactions`, `GET /transactions/:id`, `POST /transactions`, `PATCH /transactions/:id/status`, `POST /transactions/:id/cancel` | `Todo` |
+| Queues | `GET /queues/today`, `GET /queues?date=...`, `PATCH /queues/:transactionId/status` | `Todo` |
+| Loans | `GET /loans`, `GET /loans/active`, `GET /loans/:id`, `POST /loans/:id/return` | `Todo` |
+| Inventory | `GET /inventory/balances`, `GET /inventory/movements`, `POST /inventory/adjustments` | `Todo` |
+| Dashboard | `GET /dashboard/today` | `Todo` |
 
-หมายเหตุ: frontend plan เดิมคาด endpoint บางจุดเป็น `/cylinder-loans` แต่ backend ปัจจุบันใช้ `/loans` ให้ frontend ปรับ wrapper ให้ตรง หรือ backend เพิ่ม alias ถ้าต้องการ contract ชื่อเดียวกับเอกสาร business
+หมายเหตุ: endpoint ทั้งหมดในตารางเป็น contract เป้าหมายและยังไม่มี implementation ปัจจุบัน frontend plan เดิมคาด endpoint บางจุดเป็น `/cylinder-loans` จึงต้องยืนยันว่าจะใช้ `/loans` หรือ `/cylinder-loans` ก่อน implement
 
 ## 5. Phase 0: Alignment และ Contract
 
@@ -155,7 +158,7 @@ Base path:
 
 ## 6. Phase 1: Foundation Hardening
 
-เป้าหมาย: ทำ foundation ที่มีอยู่ให้มั่นคงและพร้อม production-like MVP
+เป้าหมาย: สร้าง foundation ให้มั่นคงและพร้อม production-like MVP
 
 งานที่ต้องทำ:
 
@@ -202,7 +205,7 @@ Base path:
 
 ## 8. Phase 3: Auth และ Users
 
-เป้าหมาย: ทำ auth ที่มีอยู่ให้ครบพร้อม frontend integration
+เป้าหมาย: สร้าง auth ให้ครบพร้อม frontend integration
 
 งานที่ต้องทำ:
 
@@ -223,7 +226,7 @@ Base path:
 
 ## 9. Phase 4: Products
 
-เป้าหมาย: Product Management ที่มีอยู่ต้องพร้อมเป็น master data สำหรับ transaction
+เป้าหมาย: สร้าง Product Management ให้พร้อมเป็น master data สำหรับ transaction
 
 งานที่ต้องทำ:
 
@@ -446,31 +449,31 @@ model ProductImage {
 
 | ข้อ | เกณฑ์ | สถานะปัจจุบัน | หลักฐานจาก code จริง | งานที่ต้องทำต่อ |
 | --- | --- | --- | --- | --- |
-| 1 | Health check ใช้งานได้ | `Done` | `GET /api/health` ใน `app.ts` | เพิ่ม smoke test |
-| 2 | Standard success/error response | `Done` | `sendSuccess`, `errorMiddleware` | เพิ่ม 404 standard response |
-| 3 | Admin login สำเร็จ | `Done` | `AuthService.login`, `/auth/login`; HTTP smoke test ด้วย `admin_kmg` ผ่านหลังแก้ validate middleware | เพิ่ม integration test |
-| 4 | Current user ใช้งานได้ | `Done` | `/auth/me`, `authMiddleware` | เพิ่ม integration test |
-| 5 | Role guard ป้องกัน endpoint ได้ | `Done` | `roleMiddleware([ROLE_CODES.ADMIN])` ใน protected modules | เพิ่ม forbidden tests |
-| 6 | Product CRUD + soft delete | `Done` | `ProductService`, `product.routes.ts` | เพิ่ม tests |
-| 7 | Product ใหม่สร้าง inventory balance | `Done` | `ProductService.create` ใช้ `inventoryBalance.create` | เพิ่ม test |
-| 8 | Transaction create รองรับหลายสินค้า | `Partial` | `createTransactionSchema.items.min(1)`, `TransactionService.create` | เพิ่ม validation/test ต่อ transaction type |
-| 9 | `DELIVERY_EXCHANGE` สร้าง queue | `Partial` | `queueNo` generate ใน `TransactionService.create` | เพิ่ม concurrency conflict handling/test |
-| 10 | `DELIVERY_EXCHANGE` ไม่ตัด stock ตอน create | `Done` | completed effects ทำเฉพาะ default completed; delivery default `PENDING` | เพิ่ม test |
-| 11 | `DELIVERY_EXCHANGE` ตัด stock ตอน complete | `Partial` | `changeStatus` สร้าง `FULL_OUT` + `EMPTY_IN` | เพิ่ม insufficient stock/test |
-| 12 | `WALK_IN_EXCHANGE` ตัด stock ทันที | `Partial` | `applyCompletedEffects` สร้าง `FULL_OUT` + `EMPTY_IN` | เพิ่ม test |
-| 13 | `BORROW_CYLINDER` สร้าง loan | `Partial` | `applyCompletedEffects` สร้าง `cylinderLoan` | เพิ่ม test และ validate borrow fields |
-| 14 | `RETURN_CYLINDER` คืนถังและ update loan | `Partial` | return transaction/movement มี แต่ loan status ยังไม่ update ครบ | Implement loan lifecycle update |
-| 15 | `BUY_FULL_TANK` ตัดเฉพาะถังเต็ม | `Partial` | `applyCompletedEffects` สร้าง `FULL_OUT` | เพิ่ม test |
-| 16 | Status transition ถูกต้อง | `Partial` | `VALID_STATUS_TRANSITIONS` ใช้ใน `changeStatus` | เพิ่ม tests สำหรับ invalid/final states |
-| 17 | Status log ถูกสร้างทุกครั้ง | `Partial` | create/status update สร้าง status logs | เพิ่ม tests |
-| 18 | Inventory balance/movement ทำงาน | `Partial` | `InventoryService.applyMovements`, `adjustInventory` | เพิ่ม concurrency/test/audit review |
-| 19 | Active loans แสดงรายการค้าง | `Partial` | `LoanRepository.active` | ต้องทำ return lifecycle ให้สถานะค้างถูกต้อง |
-| 20 | Dashboard today ใช้งานได้ | `Done` | `DashboardService.today` | เพิ่ม tests/timezone check |
-| 21 | Transaction history filter ได้ | `Partial` | filter type/status/customerPhone | เพิ่ม filter date/name/transactionNo ถ้าต้องการตาม planning |
+| 1 | Health check ใช้งานได้ | `Todo` | ไม่พบ `app.ts` หรือ health route | Implement แล้วเพิ่ม smoke test |
+| 2 | Standard success/error response | `Todo` | ไม่พบ response/error utilities | Implement response helpers และ middleware |
+| 3 | Admin login สำเร็จ | `Todo` | ไม่พบ Auth module | Implement แล้วเพิ่ม integration test |
+| 4 | Current user ใช้งานได้ | `Todo` | ไม่พบ `/auth/me` หรือ auth middleware | Implement แล้วเพิ่ม integration test |
+| 5 | Role guard ป้องกัน endpoint ได้ | `Todo` | ไม่พบ role middleware | Implement แล้วเพิ่ม forbidden tests |
+| 6 | Product CRUD + soft delete | `Todo` | ไม่พบ Product module | Implement แล้วเพิ่ม tests |
+| 7 | Product ใหม่สร้าง inventory balance | `Todo` | ไม่พบ ProductService หรือ schema | Implement แล้วเพิ่ม test |
+| 8 | Transaction create รองรับหลายสินค้า | `Todo` | ไม่พบ Transaction module | Implement validation/service และ tests |
+| 9 | `DELIVERY_EXCHANGE` สร้าง queue | `Todo` | ไม่พบ queue generation code | Implement concurrency handling และ tests |
+| 10 | `DELIVERY_EXCHANGE` ไม่ตัด stock ตอน create | `Todo` | ไม่พบ transaction/inventory workflow | Implement rule แล้วเพิ่ม test |
+| 11 | `DELIVERY_EXCHANGE` ตัด stock ตอน complete | `Todo` | ไม่พบ status/inventory workflow | Implement แล้วเพิ่ม insufficient stock tests |
+| 12 | `WALK_IN_EXCHANGE` ตัด stock ทันที | `Todo` | ไม่พบ completed effects | Implement แล้วเพิ่ม test |
+| 13 | `BORROW_CYLINDER` สร้าง loan | `Todo` | ไม่พบ loan creation workflow | Implement แล้วเพิ่ม tests |
+| 14 | `RETURN_CYLINDER` คืนถังและ update loan | `Todo` | ไม่พบ loan return workflow | Implement loan lifecycle update |
+| 15 | `BUY_FULL_TANK` ตัดเฉพาะถังเต็ม | `Todo` | ไม่พบ completed effects | Implement แล้วเพิ่ม test |
+| 16 | Status transition ถูกต้อง | `Todo` | ไม่พบ status constants/service | Implement แล้วเพิ่ม invalid/final-state tests |
+| 17 | Status log ถูกสร้างทุกครั้ง | `Todo` | ไม่พบ status log schema/service | Implement แล้วเพิ่ม tests |
+| 18 | Inventory balance/movement ทำงาน | `Todo` | ไม่พบ Inventory module | Implement แล้วเพิ่ม concurrency/audit tests |
+| 19 | Active loans แสดงรายการค้าง | `Todo` | ไม่พบ Loan repository/service | Implement return lifecycle และ active query |
+| 20 | Dashboard today ใช้งานได้ | `Todo` | ไม่พบ Dashboard module | Implement แล้วเพิ่ม timezone tests |
+| 21 | Transaction history filter ได้ | `Todo` | ไม่พบ Transaction repository/routes | Implement filters ตาม contract |
 | 22 | API docs พร้อม frontend | `Todo` | ยังไม่พบ OpenAPI/Swagger | เพิ่ม API docs หรือ contract รวม product image upload/response |
 | 23 | Tests สำคัญครบ | `Todo` | ไม่พบ test files | เพิ่ม unit/integration tests |
-| 24 | `npm run build` ผ่าน | `Done` | รันล่าสุดผ่านหลังแก้ `validate.middleware.ts` | รันซ้ำก่อน merge/ส่งมอบครั้งถัดไป |
-| 25 | `npm test` ผ่าน | `Not verified` | ยังไม่มีผลล่าสุดในเอกสารนี้ | เพิ่ม tests แล้วรัน |
+| 24 | `npm run build` ผ่าน | `Todo` | ไม่ผ่านด้วย `TS18003` เพราะไม่มี TypeScript inputs | เพิ่ม source files แล้วรันใหม่ |
+| 25 | `npm test` ผ่าน | `Todo` | ยังไม่มี test files | เพิ่ม tests แล้วรัน |
 | 26 | `npm run lint` ผ่าน | `Todo` | `npm run lint` ยังรันไม่ได้เพราะไม่มี `eslint.config.*` สำหรับ ESLint v9 | เพิ่ม ESLint flat config แล้วรัน lint |
 | 27 | Product images ใช้งานได้ใน local | `Todo` | ยังไม่มี `ProductImage` หรือ storage implementation | เพิ่ม local provider, upload/delete API และ tests |
 | 28 | Product image เปลี่ยน provider ได้ | `Todo` | ยังไม่มี storage abstraction | เพิ่ม `StorageProvider` และทดสอบด้วย fake provider |
