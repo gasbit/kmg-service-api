@@ -27,7 +27,7 @@ Legend:
 - [ ] Phase 1: Foundation, middleware และ response/error format
   สถานะ: `Todo` - directory มีอยู่ แต่ยังไม่มีไฟล์ config, middleware, shared errors หรือ response utilities
 - [ ] Phase 2: Database schema, migration และ seed
-  สถานะ: `Todo` - มี `DATABASE_URL` key ใน env แต่ไม่มี Prisma schema, migration SQL หรือ seed; `prisma validate` ไม่ผ่าน
+  สถานะ: `Partial` - สร้าง Prisma schema, initial migration, database config และ admin seed แล้ว; `prisma validate`, `prisma generate` และ TypeScript build ผ่าน แต่ local PostgreSQL ที่ `localhost:5432` ยังไม่ตอบสนอง จึงยังไม่ได้ apply migration/seed จริง
 - [ ] Phase 3: Auth และ role base
   สถานะ: `Todo` - ยังไม่มี auth source code, route, middleware หรือ smoke test ที่รันได้
 - [ ] Phase 4: Product management
@@ -66,14 +66,14 @@ Legend:
 | --- | --- | --- | --- |
 | App bootstrap | `Todo` | ไม่พบ `src/app.ts` หรือ `src/server.ts` | สร้าง app/server, health check และ middleware wiring |
 | Route wiring | `Todo` | ไม่พบ `src/routes.ts` หรือ module route files | สร้าง `/api/v1` และ wire module routes |
-| Config/logger/database | `Todo` | มี env keys แต่ไม่พบ `env.ts`, `database.ts`, `logger.ts` | สร้าง config validation, logger และ Prisma client |
+| Config/logger/database | `Partial` | มี env validation และ Prisma client แล้ว แต่ยังไม่มี logger และยังไม่ได้ยืนยัน connection กับ PostgreSQL | สร้าง logger และเปิด local PostgreSQL เพื่อทดสอบ connection |
 | Standard response | `Todo` | ไม่พบ response utilities | สร้าง success/error response format และ BigInt serialization |
 | Error handling | `Todo` | ไม่พบ `AppError`, error codes หรือ error middleware | Implement shared error handling และ 404 middleware |
 | Auth middleware | `Todo` | ไม่พบ auth middleware | Implement Bearer token verification และ tests |
 | Role middleware | `Todo` | ไม่พบ role middleware/constants | Implement role guard และ tests |
-| Prisma schema | `Todo` | ไม่พบ `src/database/prisma/schema.prisma`; Prisma validate ไม่ผ่าน | สร้าง schema ตาม domain และตรวจด้วย Prisma |
-| Migration | `Todo` | migration directory ว่าง ไม่มี `migration.sql` | สร้าง initial migration และตรวจ constraints/indexes |
-| Seed | `Todo` | ไม่พบ `src/database/seeds/seed.ts` | สร้าง ADMIN role/admin user seed |
+| Prisma schema | `Done` | มี schema 11 models ตาม domain รวม product images และ partial loan return; Prisma validate/generate ผ่าน | ตรวจ schema drift เมื่อเชื่อม local database ได้ |
+| Migration | `Partial` | มี initial PostgreSQL migration และ SQL ตรงกับ Prisma schema | เปิด local PostgreSQL แล้ว apply migration จริง |
+| Seed | `Partial` | มี idempotent seed สำหรับ ADMIN role/admin user | apply migration แล้วรัน seed กับ local database |
 | Auth module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement login, current user, bcrypt และ JWT |
 | Product module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement CRUD, soft delete, pagination และ initial balance |
 | Product images | `Todo` | ยังไม่มี image model, storage adapter, upload/delete endpoint หรือ static local storage route | เพิ่ม `ProductImage`, local storage adapter และ API contract ที่รองรับการเปลี่ยนเป็น object storage |
