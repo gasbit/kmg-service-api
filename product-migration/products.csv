@@ -1,0 +1,4 @@
+legacyCode,brand,weightKg,exchangeCostPrice,exchangeSalePrice,fullTankPrice,isActive
+PTT-15,ปตท.,15.00,330.00,390.00,2450.00,true
+PTT-48,ปตท.,48.00,920.00,1050.00,4200.00,true
+WP-15,เวิลด์แก๊ส,15.00,320.00,380.00,2350.00,true
