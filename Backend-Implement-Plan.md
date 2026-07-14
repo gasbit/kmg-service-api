@@ -1,499 +1,284 @@
 # KMG-SERVICE แผน Implement ฝั่ง Backend
 
-เอกสารนี้เป็นแผนดำเนินการสำหรับ `KMG-SERVICE-API` โดยอ้างอิงจาก `../Business-Flow.md`, `../Backend-Architecture.md`, `../Database-Design.md`, `../Planning.md`, `../Context.md`, `./CONTEXT.md` และ code จริงใน `KMG-SERVICE-API/src`
+เอกสารนี้เป็นแผนดำเนินการของ `KMG-SERVICE-API` โดยอ้างอิงจาก `AGENTS.md`, `CONTEXT.md`, เอกสาร business/architecture/database ที่เกี่ยวข้อง และ source code จริงใน `src`
 
-เป้าหมายคือทำ backend MVP ให้เป็น source of truth ของ business workflow ทั้งหมด ได้แก่ auth, products, product images, transactions, queues, loans, inventory และ dashboard โดยรักษา transaction history, snapshot data, status logs และ inventory movements ให้ถูกต้อง
+เป้าหมายคือทำ backend MVP ให้เป็น source of truth ของ auth, products, transactions, queues, loans, inventory และ dashboard โดยรักษา snapshot data, status logs และ inventory movements ให้ตรวจสอบย้อนหลังได้
 
-แนวทางจัดเก็บรูปสินค้าใน MVP:
+## 1. สถานะปัจจุบันจาก Code จริง
 
-- ใช้ local storage ที่ `KMG-SERVICE-API/storage/products` ระหว่างพัฒนาในเครื่อง
-- เก็บเฉพาะ `objectKey` และ metadata ใน PostgreSQL ไม่เก็บ binary/Base64 ใน database
-- ให้ API เป็นผู้สร้าง/ลบไฟล์และส่ง `imageUrl` ให้ frontend
-- แยก storage interface ออกจาก ProductService เพื่อให้เปลี่ยนเป็น S3-compatible object storage เช่น Cloudflare R2 หรือ AWS S3 ใน production ได้โดยไม่เปลี่ยน product API หลัก
-
-## 1. Checklist ภาพรวมจาก Code จริง
-
-ตรวจล่าสุดจาก source code ใน `KMG-SERVICE-API/src` บน branch `feature/authentication` ที่ commit `d0e9b5d` พบว่าเหลือเพียง directory skeleton และ `src/tests/.gitkeep` โดย implementation เดิม, Prisma schema, migration และ seed ถูกลบใน reset commit ปัจจุบันทุก phase จึงกลับเป็น `Todo` จนกว่าจะมี code และผ่าน verification ที่เกี่ยวข้อง
+ตรวจล่าสุดวันที่ `2026-07-13` จาก branch `feature/product` ที่ commit `d42d13e` รวม changes ที่ยังไม่ commit ใน working tree
 
 Legend:
 
-- `Done`: มี implementation จริงและพร้อมใช้งานในระดับ MVP ตามที่ตรวจจาก code
-- `Partial`: มี implementation แล้ว แต่ยังขาด behavior สำคัญ, edge case, test หรือความครบตาม business rule
+- `Done`: มี implementation และ verification ที่เพียงพอสำหรับ scope ของ phase
+- `Partial`: มี implementation แล้ว แต่ยังขาด behavior, integration test หรือ runtime verification สำคัญ
 - `Todo`: ยังไม่มี implementation ที่ใช้งานได้
-- `Not verified`: ยังไม่ได้ยืนยันด้วยการรัน command หรือ integration test ล่าสุด
+- `Not verified`: มี code หรือ artifact แต่ยังไม่ได้ยืนยันกับ dependency ภายนอก เช่น PostgreSQL
 
-- [ ] Phase 0: โครง backend และ route wiring
-  สถานะ: `Todo` - ยังไม่มี `app.ts`, `server.ts`, `routes.ts`, health check หรือ module routes
+- [x] Phase 0: App bootstrap และ route wiring
+  สถานะ: `Done` - มี `app.ts`, `server.ts`, `/api/health`, `/api/auth`, `/api/products`, 404 และ error middleware; compiled health smoke test ตอบ `200`
 - [ ] Phase 1: Foundation, middleware และ response/error format
-  สถานะ: `Todo` - directory มีอยู่ แต่ยังไม่มีไฟล์ config, middleware, shared errors หรือ response utilities
-- [ ] Phase 2: Database schema, migration และ seed
-  สถานะ: `Partial` - สร้าง Prisma schema, initial migration, database config และ admin seed แล้ว; `prisma validate`, `prisma generate` และ TypeScript build ผ่าน แต่ local PostgreSQL ที่ `localhost:5432` ยังไม่ตอบสนอง จึงยังไม่ได้ apply migration/seed จริง
+  สถานะ: `Partial` - มี env validation, request ID, standard success/error response, auth, generic role guard และ Zod body/query/params validation; ยังไม่มี logger config ตาม architecture และยังขาด middleware integration tests หลายกรณี
+- [ ] Phase 2: Database schema, migrations และ seeds
+  สถานะ: `Partial` - Prisma schema ครบ 11 models, มี 4 migrations, admin seed และ product test-data seed; `prisma validate`/`prisma generate` ผ่าน แต่ยังยืนยัน migration status และ seed กับ PostgreSQL ไม่ได้
 - [ ] Phase 3: Auth และ role base
-  สถานะ: `Todo` - ยังไม่มี auth source code, route, middleware หรือ smoke test ที่รันได้
-- [ ] Phase 4: Product management
-  สถานะ: `Todo` - ยังไม่มี Product module, CRUD, inventory initialization หรือ product image implementation
+  สถานะ: `Partial` - `POST /api/auth/login` และ `GET /api/auth/me` implement แล้ว, ไม่ expose `passwordHash`, รองรับ active user/role และ JWT BigInt ID แบบ string; มี AuthService unit tests แต่ยังไม่มี Supertest/database integration tests และ role middleware tests
+- [ ] Phase 4: Product management และ product images
+  สถานะ: `Partial` - CRUD, pagination/search, soft delete, initial inventory balance, local image storage, image metadata, primary image constraint และ image endpoints implement แล้ว; มี ProductService unit tests แต่ยังขาด endpoint/database integration tests และ cleanup/recovery บางกรณี
 - [ ] Phase 5: Transaction core
-  สถานะ: `Todo` - ยังไม่มี Transaction module หรือ workflow implementation
+  สถานะ: `Todo` - schema พร้อม แต่ยังไม่มี constants, module, routes, workflow, snapshots/status logs orchestration หรือ tests
 - [ ] Phase 6: Queue workflow
-  สถานะ: `Todo` - ยังไม่มี Queue module, route หรือ service
+  สถานะ: `Todo` - มี fields/unique constraint ใน database แต่ยังไม่มี queue service/routes หรือ concurrent queue-number generation
 - [ ] Phase 7: Cylinder loan workflow
-  สถานะ: `Todo` - ยังไม่มี Loan module หรือ loan return lifecycle
+  สถานะ: `Todo` - schema รองรับ `returnedQuantity` แล้ว แต่ยังไม่มี borrow/partial-return/full-return service และ endpoints
 - [ ] Phase 8: Inventory workflow
-  สถานะ: `Todo` - ยังไม่มี Inventory module, balances หรือ movements implementation
+  สถานะ: `Partial` - มี balance/movement schema, product creation สร้าง balance ตั้งต้น และ product test-data seed สร้าง `ADJUSTMENT` movements; ยังไม่มี inventory module, transaction effects, adjustment endpoint หรือ negative-stock/concurrency protection
 - [ ] Phase 9: Dashboard read aggregation
-  สถานะ: `Todo` - ยังไม่มี Dashboard module หรือ endpoint
-- [ ] Phase 10: Tests, OpenAPI และ hardening
-  สถานะ: `Todo` - build ไม่ผ่านเพราะไม่มี TypeScript inputs; ยังไม่มี test files, ESLint v9 flat config หรือ OpenAPI docs
+  สถานะ: `Todo` - ยังไม่มี dashboard module หรือ endpoint
+- [ ] Phase 10: Tests, API docs และ hardening
+  สถานะ: `Partial` - build ผ่านและ unit tests 15 tests ผ่าน; Prisma validate/generate ผ่าน แต่ lint ยังไม่ผ่านเพราะไม่มี ESLint v9 flat config, ยังไม่มี OpenAPI และยังขาด integration/business workflow tests
 
-งานถัดไปที่ควรเริ่มก่อน:
+## 2. Verification ล่าสุด
 
-- [ ] สร้าง application foundation (`app.ts`, `server.ts`, routes, config, middleware และ shared utilities)
-- [ ] สร้าง Prisma schema, initial migration และ seed ใหม่
-- [ ] Implement auth และ role base ก่อน business modules
-- [ ] ปิด gap ของ `returnLoan`: อัปเดต `cylinder_loans.loan_status`, `returned_date` และรองรับ partial return ให้ถูกต้อง
-- [ ] เพิ่ม test สำคัญของ `TransactionService`: create transaction, status transition, delivery complete ตัด stock, invalid transition, insufficient stock
-- [ ] เพิ่ม test ของ loan return และ inventory movement
-- [ ] Harden queue number generation ด้วย DB transaction/unique constraint retry หรือ conflict handling
-- [ ] ตรวจ `adjustInventory` ว่า movement quantity/note สื่อความหมายพอสำหรับ delta หลาย field หรือควรแยก movement ต่อ balance type
-- [ ] เพิ่ม OpenAPI/Swagger หรืออย่างน้อย endpoint contract สำหรับ frontend
-- [ ] ทำให้ `npm run build` ผ่านหลังมี TypeScript source files
-- [ ] เพิ่ม/แก้ ESLint config ของ API ให้รองรับ ESLint v9 แล้วรัน `npm run lint`
-- [ ] รัน `npm test`, `npm run prisma:generate` หลังแก้ logic สำคัญ
-
-## 2. รายละเอียดสถานะจากการตรวจ Code จริง
-
-| ส่วนงาน | สถานะ | หลักฐานจาก code จริง | งานที่ต้องทำต่อ |
-| --- | --- | --- | --- |
-| App bootstrap | `Todo` | ไม่พบ `src/app.ts` หรือ `src/server.ts` | สร้าง app/server, health check และ middleware wiring |
-| Route wiring | `Todo` | ไม่พบ `src/routes.ts` หรือ module route files | สร้าง `/api` และ wire module routes |
-| Config/logger/database | `Partial` | มี env validation และ Prisma client แล้ว แต่ยังไม่มี logger และยังไม่ได้ยืนยัน connection กับ PostgreSQL | สร้าง logger และเปิด local PostgreSQL เพื่อทดสอบ connection |
-| Standard response | `Todo` | ไม่พบ response utilities | สร้าง success/error response format และ BigInt serialization |
-| Error handling | `Todo` | ไม่พบ `AppError`, error codes หรือ error middleware | Implement shared error handling และ 404 middleware |
-| Auth middleware | `Todo` | ไม่พบ auth middleware | Implement Bearer token verification และ tests |
-| Role middleware | `Todo` | ไม่พบ role middleware/constants | Implement role guard และ tests |
-| Prisma schema | `Done` | มี schema 11 models ตาม domain รวม product images และ partial loan return; Prisma validate/generate ผ่าน | ตรวจ schema drift เมื่อเชื่อม local database ได้ |
-| Migration | `Partial` | มี initial PostgreSQL migration และ SQL ตรงกับ Prisma schema | เปิด local PostgreSQL แล้ว apply migration จริง |
-| Seed | `Partial` | มี idempotent seed สำหรับ ADMIN role/admin user | apply migration แล้วรัน seed กับ local database |
-| Auth module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement login, current user, bcrypt และ JWT |
-| Product module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement CRUD, soft delete, pagination และ initial balance |
-| Product images | `Todo` | ยังไม่มี image model, storage adapter, upload/delete endpoint หรือ static local storage route | เพิ่ม `ProductImage`, local storage adapter และ API contract ที่รองรับการเปลี่ยนเป็น object storage |
-| Transaction list/detail | `Todo` | ไม่พบ transaction source files | Implement list/detail และ filters ตาม contract |
-| Transaction create | `Todo` | ไม่พบ TransactionService หรือ repository | Implement workflow, snapshots, status log, queue และ effects |
-| Transaction status change | `Todo` | ไม่พบ status constants/service/log implementation | Implement transitions, logs และ completed effects |
-| Queue number | `Todo` | ไม่มี schema หรือ queue generation code | Implement ภายใน DB transaction พร้อม unique/conflict handling |
-| Cancel transaction | `Todo` | ไม่มี transaction service | Implement ผ่าน status transition rule เดียวกัน |
-| Inventory movements | `Todo` | ไม่พบ inventory source files | Implement balances, movements และ negative-stock protection |
-| Inventory adjustment | `Todo` | ไม่มี adjustment endpoint/service | Implement adjustment พร้อม note และ audit semantics |
-| Queue module | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement queue read/status endpoints |
-| Loan list/detail | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement list/active/detail และ filters |
-| Loan return | `Todo` | ไม่มี loan return workflow | Implement partial/full return และ transaction/inventory effects |
-| Dashboard | `Todo` | directory มีอยู่แต่ไม่มี source files | Implement read-only daily aggregation |
-| Users module | `Todo` | directory มีอยู่แต่ไม่มี source files | ตัดสินใจ MVP scope แล้ว implement หรือระบุ future scope |
-| Tests | `Todo` | ไม่พบ `*.test.ts` หรือ `*.spec.ts` ใน `src` | เพิ่ม unit/integration tests สำหรับ business-critical services |
-| API docs | `Todo` | ยังไม่พบ OpenAPI/Swagger setup | เพิ่ม OpenAPI docs หรือ contract markdown สำหรับ frontend |
-| Build/test verification | `Todo` | `npm run build` ไม่ผ่านด้วย TS18003 เพราะไม่มี TypeScript inputs; Prisma validate ไม่ผ่าน | Implement source/schema, เพิ่ม ESLint config แล้วรัน verification ทั้งหมด |
-
-## 3. หลักการดำเนินงาน
-
-1. Backend เป็น business source of truth ของระบบ
-2. `TransactionService` ต้องเป็นเจ้าของ workflow สำคัญที่กระทบ transaction, status, queue, inventory และ loan
-3. Repository ห้ามเปิด transaction เอง ให้รับ Prisma transaction client จาก service เมื่อต้องอยู่ใน workflow เดียวกัน
-4. ทุก stock mutation ต้องสร้าง `inventory_movements`
-5. ทุก status change ต้องสร้าง `transaction_status_logs`
-6. `DELIVERY_EXCHANGE` ต้องตัด stock ตอนเปลี่ยนเป็น `COMPLETED` เท่านั้น
-7. Dashboard ต้องเป็น read-only aggregation
-8. BigInt IDs ต้อง serialize เป็น string ใน API response
-9. ห้ามส่ง `passwordHash` หรือ secrets ออก API
-10. ทุก mutation endpoint ต้อง validate payload ด้วย Zod
-11. Product image ต้องเก็บเป็น object/file key และ metadata ใน database ไม่เก็บ binary หรือ Base64
-12. Product image storage ต้องเข้าถึงผ่าน storage abstraction ไม่ให้ business module ผูกกับ local filesystem หรือ provider ใด provider หนึ่ง
-13. Local image URL ต้องสร้างจาก configuration เช่น `PUBLIC_API_URL` ไม่ hardcode domain ใน database
-
-## 4. API Contract ปัจจุบัน
-
-Base path:
-
-```text
-/api
-```
-
-| Module | Endpoint เป้าหมาย | สถานะปัจจุบัน |
+| Command / Check | ผลล่าสุด | หมายเหตุ |
 | --- | --- | --- |
-| Health | `GET /api/health` | `Todo` - ยังไม่มี app/route |
-| Auth | `POST /auth/login`, `GET /auth/me` | `Todo` - ยังไม่มี module/route |
-| Products | `GET /products`, `GET /products/:id`, `POST /products`, `PATCH /products/:id`, `DELETE /products/:id` | `Todo` - ยังไม่มี module/route |
-| Product images | `POST /products/:id/images`, `GET /products/:id/images`, `PATCH /products/:id/images/:imageId`, `DELETE /products/:id/images/:imageId` | `Todo` - MVP ใช้ local storage; ภายหลังเปลี่ยน implementation เป็น object storage |
-| Transactions | `GET /transactions`, `GET /transactions/:id`, `POST /transactions`, `PATCH /transactions/:id/status`, `POST /transactions/:id/cancel` | `Todo` |
-| Queues | `GET /queues/today`, `GET /queues?date=...`, `PATCH /queues/:transactionId/status` | `Todo` |
-| Loans | `GET /loans`, `GET /loans/active`, `GET /loans/:id`, `POST /loans/:id/return` | `Todo` |
-| Inventory | `GET /inventory/balances`, `GET /inventory/movements`, `POST /inventory/adjustments` | `Todo` |
-| Dashboard | `GET /dashboard/today` | `Todo` |
+| `npm run build` | `Passed` | TypeScript strict build ผ่าน |
+| `npm test` | `Passed` | 3 test files, 15 tests ผ่าน |
+| `npx prisma validate` | `Passed` | schema ถูกต้อง |
+| `npm run prisma:generate` | `Passed` | generate Prisma Client v6.19.3 สำเร็จ |
+| Compiled health smoke test | `Passed` | `GET /api/health` ตอบ `200` และ standard response |
+| `npx prisma migrate status` | `Not verified` | เชื่อม datasource ที่ `localhost:5432` ไม่สำเร็จ จึงยังไม่ยืนยัน applied migrations |
+| `npm run prisma:seed` | `Not run` | ไม่รันเพราะ database ยังไม่พร้อมและคำสั่ง mutate data |
+| `npm run lint` | `Failed` | ESLint 9 หา `eslint.config.*` ไม่พบ |
 
-หมายเหตุ: endpoint ทั้งหมดในตารางเป็น contract เป้าหมายและยังไม่มี implementation ปัจจุบัน frontend plan เดิมคาด endpoint บางจุดเป็น `/cylinder-loans` จึงต้องยืนยันว่าจะใช้ `/loans` หรือ `/cylinder-loans` ก่อน implement
+หมายเหตุ: Prisma เตือนว่า config ใต้ `package.json#prisma` จะถูกถอดใน Prisma 7 ควรย้ายไป `prisma.config.ts` ก่อน upgrade major version
 
-## 5. Phase 0: Alignment และ Contract
+## 3. Implementation Inventory
 
-เป้าหมาย: ยืนยัน contract ระหว่าง backend, frontend และ database ก่อน harden logic เพิ่ม
+| ส่วนงาน | สถานะ | หลักฐานจาก code | งานที่ต้องทำต่อ |
+| --- | --- | --- | --- |
+| App bootstrap | `Done` | `src/app.ts`, `src/server.ts` | เพิ่ม graceful shutdown และใช้ logger แทน `console.log` |
+| Health check | `Done` | `GET /api/health`; smoke test `200` | เพิ่ม endpoint integration test เพื่อกัน regression |
+| Route wiring | `Partial` | wire auth และ products ใต้ `/api` | wire transactions, queues, loans, inventory และ dashboard |
+| Env/config | `Partial` | validate database/JWT/CORS/storage/admin settings | ทบทวน production defaults และแยก test env |
+| Logger | `Todo` | มี Pino dependency แต่ไม่มี `src/config/logger.ts` หรือ request logger | เพิ่ม redaction สำหรับ token/password/sensitive customer data |
+| Standard response | `Done` | `sendSuccess` และ error middleware ใส่ request ID | พิจารณา shared pagination helper เพื่อลด manual response shape |
+| Error handling | `Partial` | `AppError`, shared codes, 404/error middleware | เพิ่ม logging ของ unexpected error โดยไม่ leak รายละเอียด |
+| Validation | `Partial` | body/query/params middleware; query ใช้ `response.locals.validatedQuery` รองรับ Express 5 | เพิ่ม regression/integration tests ของทั้ง 3 middleware |
+| Auth middleware | `Partial` | Bearer/JWT verification และ reload active user จาก database | เพิ่ม missing/invalid/expired token integration tests |
+| Role middleware | `Partial` | generic `requireRoles(...roles)` และ future role constants | เพิ่ม unauthorized/forbidden/allowed tests |
+| Prisma schema | `Done` | 11 models ครอบคลุม domain, snapshots, logs, balances, movements และ images | เพิ่ม domain checks ใน service; Prisma schema ไม่ enforce string enums |
+| Migrations | `Not verified` | initial + product images/partial return + indexes + single-primary image | เปิด PostgreSQL แล้วตรวจ `migrate status`/schema drift |
+| Seeds | `Not verified` | idempotent admin seed; product/inventory seed สร้าง adjustment audit | รันกับ local database และตรวจผล/rollback procedure |
+| Auth module | `Partial` | login/me, bcrypt, JWT, inactive checks, public DTO | เพิ่ม HTTP/database integration tests |
+| Users module | `Todo` | ยังไม่มี module | คงเป็น future scope เว้นแต่ frontend MVP ต้องจัดการ users |
+| Product CRUD | `Partial` | list/get/create/update/soft delete, pagination/search/includeInactive | เพิ่ม HTTP/database tests, duplicate policy และ transaction-use guard |
+| Product initial balance | `Partial` | create product + balance อยู่ใน `prisma.$transaction` | เพิ่ม real database integration test |
+| Product images | `Partial` | storage abstraction, local provider, upload/list/update/delete, MIME signature, size/count limits, UUID/objectKey, public URL | เพิ่ม endpoint tests, cleanup/retry policy และ file/database consistency tests |
+| Transaction module | `Todo` | มีเฉพาะ database models | implement Phase 5 |
+| Queue module | `Todo` | มี `queueDate`, `queueNo` และ unique constraint | implement Phase 6 |
+| Loan module | `Todo` | schema มี returned quantity/status/date | implement Phase 7 |
+| Inventory module | `Todo` | schema และ seed effects มีแล้ว แต่ไม่มี API/service | implement Phase 8 |
+| Dashboard module | `Todo` | ไม่พบ source | implement Phase 9 |
+| API docs | `Partial` | มี auth/product module specs แต่ไม่มี contract รวม/OpenAPI | อัปเดต specs ให้ตรง code และเพิ่ม OpenAPI หรือ contract กลาง |
 
-งานที่ต้องทำ:
+## 4. API Contract ที่ Implement แล้ว
 
-1. สรุป endpoint ปัจจุบันจาก `src/routes.ts` และ module routes
-2. ยืนยัน path naming ระหว่าง frontend กับ backend โดยเฉพาะ `/loans` vs `/cylinder-loans`
-3. ยืนยัน request/response DTO ที่ frontend ต้องใช้
-4. ยืนยัน enum constants:
-   - `TRANSACTION_TYPES`
-   - `TRANSACTION_STATUSES`
-   - `ITEM_ACTIONS`
-   - `INVENTORY_MOVEMENT_TYPES`
-   - `LOAN_STATUSES`
-   - `ROLE_CODES`
-5. ยืนยันรายการ filter ที่ MVP ต้องรองรับจริง
-6. ระบุ business gaps ที่ต้องปิดก่อน frontend integration
+Base path: `/api`
 
-เกณฑ์ยอมรับ:
+| Module | Endpoint | สถานะ |
+| --- | --- | --- |
+| Health | `GET /api/health` | `Implemented` |
+| Auth | `POST /api/auth/login` | `Implemented` |
+| Auth | `GET /api/auth/me` | `Implemented` |
+| Products | `GET /api/products` | `Implemented` |
+| Products | `GET /api/products/:productId` | `Implemented` |
+| Products | `POST /api/products` | `Implemented` |
+| Products | `PATCH /api/products/:productId` | `Implemented` |
+| Products | `DELETE /api/products/:productId` | `Implemented` แบบ soft delete |
+| Product images | `GET /api/products/:productId/images` | `Implemented` |
+| Product images | `POST /api/products/:productId/images` | `Implemented` แบบ multipart field `file` |
+| Product images | `PATCH /api/products/:productId/images/:imageId` | `Implemented` |
+| Product images | `DELETE /api/products/:productId/images/:imageId` | `Implemented` |
+| Uploads | `GET /uploads/products/...` | `Implemented` static local storage นอก `/api` |
 
-1. Frontend และ backend ใช้ endpoint contract เดียวกัน
-2. DTO สำคัญถูกบันทึกไว้หรือ generate ได้
-3. ไม่มี business flow สำคัญที่ frontend ต้องเดาเอง
+ทุก product endpoint บังคับ `authMiddleware` และ role `ADMIN`
 
-## 6. Phase 1: Foundation Hardening
+## 5. API Contract เป้าหมายที่ยังไม่ Implement
 
-เป้าหมาย: สร้าง foundation ให้มั่นคงและพร้อม production-like MVP
+| Module | Endpoint เป้าหมาย | สถานะ |
+| --- | --- | --- |
+| Transactions | `GET /api/transactions`, `GET /api/transactions/:id` | `Todo` |
+| Transactions | `POST /api/transactions` | `Todo` |
+| Transactions | `PATCH /api/transactions/:id/status` | `Todo` |
+| Transactions | `POST /api/transactions/:id/cancel` | `Todo` |
+| Queues | `GET /api/queues/today`, `GET /api/queues?date=...` | `Todo` |
+| Queues | `PATCH /api/queues/:transactionId/status` | `Todo` |
+| Loans | `GET /api/loans`, `GET /api/loans/active`, `GET /api/loans/:id` | `Todo` |
+| Loans | `POST /api/loans/:id/return` | `Todo` |
+| Inventory | `GET /api/inventory/balances`, `GET /api/inventory/movements` | `Todo` |
+| Inventory | `POST /api/inventory/adjustments` | `Todo` |
+| Dashboard | `GET /api/dashboard/today` | `Todo` |
 
-งานที่ต้องทำ:
+ก่อน implement loan routes ต้องล็อกชื่อ path ระหว่าง `/loans` กับ `/cylinder-loans` ให้ตรง frontend และเอกสารทุกชุด
 
-1. เพิ่ม 404 middleware ที่คืน standard error response
-2. ตรวจ env validation ให้ครบ เช่น `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN`, `PORT`
-3. ตรวจ logging ว่าไม่ log password/token/customer sensitive data เกินจำเป็น
-4. เพิ่ม helper pagination meta ถ้าต้องการ response format เดียวกันทุก list
-5. เพิ่ม tests สำหรับ middleware สำคัญ:
-   - validation error
-   - auth missing/invalid token
-   - forbidden role
-   - standard error response
+## 6. ลำดับงานแนะนำจากสถานะปัจจุบัน
 
-เกณฑ์ยอมรับ:
+### Phase A: ปิด Product และ Foundation Gaps
 
-1. ทุก error ออก standard response format
-2. Unknown route ไม่หลุด HTML/default Express response
-3. Protected route บังคับ auth/role ถูกต้อง
-
-## 7. Phase 2: Database และ Migration Verification
-
-เป้าหมาย: ตรวจ database schema กับ business rules ให้พร้อมใช้จริง
-
-งานที่ต้องทำ:
-
-1. รัน `npm run prisma:generate`
-2. รัน migration ใน local database
-3. รัน seed admin
-4. ตรวจ indexes/unique constraints สำคัญ:
-   - `transaction_no`
-   - `(queue_date, queue_no)`
-   - transaction status/type/date
-   - loan status
-   - inventory movements by product/date
-5. พิจารณา schema สำหรับ partial return:
-   - ถ้าใช้ loan row เดียว ต้องรู้ returned quantity/remaining quantity
-   - ถ้าใช้ transaction history คำนวณ remaining ต้องมี query ที่ reliable
-
-เกณฑ์ยอมรับ:
-
-1. Prisma client generate ได้
-2. Migration และ seed ทำงานได้
-3. Schema รองรับ loan return lifecycle ได้ชัดเจน
-
-## 8. Phase 3: Auth และ Users
-
-เป้าหมาย: สร้าง auth ให้ครบพร้อม frontend integration
-
-งานที่ต้องทำ:
-
-1. เพิ่ม integration tests สำหรับ `POST /auth/login`
-2. เพิ่ม integration tests สำหรับ `GET /auth/me`
-3. ตรวจว่า response ไม่ส่ง `passwordHash`
-4. ตรวจ inactive user/role ถูก reject
-5. ตัดสินใจ User Management ใน MVP:
-   - ถ้าอยู่ใน MVP ให้เพิ่ม routes/services สำหรับ user list/create/update/soft delete
-   - ถ้าไม่อยู่ ให้ระบุเป็น future scope ใน plan และ frontend
+1. เพิ่ม ESLint v9 flat config และทำ `npm run lint` ให้ผ่าน
+2. เพิ่ม Pino logger/request logger พร้อม sensitive-field redaction
+3. เพิ่ม integration tests สำหรับ health, 404, validation, auth, role guard และ product endpoints
+4. เปิด PostgreSQL แล้วรัน migrate status, migrations และ seeds
+5. เพิ่ม database integration test ว่า create product และ initial balance commit/rollback พร้อมกัน
+6. เพิ่ม product image endpoint tests: MIME, signature, size, max count, one primary, delete และ path safety
+7. กำหนด recovery policy กรณีลบ image row สำเร็จแต่ลบไฟล์ไม่สำเร็จ ปัจจุบันมีโอกาสเหลือ orphan file
+8. ยืนยัน duplicate policy ของ product เช่น `brand + weightKg`
 
 เกณฑ์ยอมรับ:
 
-1. Admin login ได้
-2. Password ผิดได้ `UNAUTHORIZED`
-3. Token ใช้เรียก protected endpoints ได้
-4. Inactive user ใช้งานไม่ได้
+- Build, lint และ tests ผ่าน
+- Auth/Product flows ผ่าน Supertest กับ test database
+- Migration/seed ใช้ได้กับ local PostgreSQL
+- Product image database/file state มี cleanup หรือ retry ที่อธิบายได้
 
-## 9. Phase 4: Products
+### Phase B: Transaction Core
 
-เป้าหมาย: สร้าง Product Management ให้พร้อมเป็น master data สำหรับ transaction
+1. เพิ่ม constants และ Zod schemas สำหรับ transaction type/status/item action
+2. เพิ่ม transaction repository สำหรับ database access เท่านั้น
+3. สร้าง `TransactionService` เป็น owner ของ create/status/queue/inventory/loan effects
+4. Implement list/detail พร้อม filters และ BigInt/Decimal/Date serialization
+5. Implement create transaction ใน `prisma.$transaction`
+6. เก็บ customer snapshot และ product/price/cost/line-total snapshots ทุกครั้ง
+7. สร้าง initial status log ทุกครั้งที่สร้าง transaction
+8. Validate mapping ระหว่าง transaction type กับ item action/required fields
+9. บังคับใช้เฉพาะ active products และตรวจ stock แบบ atomic
+10. Implement status transitions และห้าม mutate final state
 
-งานที่ต้องทำ:
+Test matrix ขั้นต่ำ:
 
-1. เพิ่ม tests สำหรับ create product และ initial inventory balance
-2. เพิ่ม tests สำหรับ list/search/includeInactive/pagination
-3. เพิ่ม tests สำหรับ update product
-4. เพิ่ม tests สำหรับ soft delete
-5. ตรวจว่า inactive product ไม่ถูกใช้ใน transaction ใหม่
-6. พิจารณา conflict validation เช่น brand+weight duplicate ถ้า business ต้องการ
-
-เกณฑ์ยอมรับ:
-
-1. Product CRUD ทำงานครบ
-2. Soft delete ไม่ลบ row จริง
-3. Product ใหม่มี inventory balance ตั้งต้น
-4. Transaction ใหม่ใช้เฉพาะ active product
-
-### Product image storage
-
-แนวทาง MVP ใน local environment:
-
-```text
-KMG-SERVICE-API/
-└── storage/
-    └── products/
-        └── {productId}/
-            └── {uuid}.{extension}
-```
-
-Database ควรเก็บ key เช่น `products/1/{uuid}.webp` และ metadata ที่จำเป็น เช่น MIME type, file size, sort order และ primary flag โดยไม่เก็บ absolute path หรือ URL ที่ผูกกับ `localhost` ไว้ถาวร
-
-แนะนำ model แยกสำหรับหลายรูปต่อสินค้า:
-
-```prisma
-model ProductImage {
-  id           BigInt   @id @default(autoincrement())
-  productId    BigInt   @map("product_id")
-  objectKey    String   @unique @map("object_key") @db.VarChar(500)
-  originalName String?  @map("original_name") @db.VarChar(255)
-  mimeType     String   @map("mime_type") @db.VarChar(100)
-  fileSize     Int      @map("file_size")
-  sortOrder    Int      @default(0) @map("sort_order")
-  isPrimary    Boolean  @default(false) @map("is_primary")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  @@index([productId, sortOrder])
-  @@map("product_images")
-}
-```
-
-เพิ่ม `images ProductImage[]` ใน `Product` และสร้าง migration แยกจาก initial migration
-
-งานที่ต้องทำ:
-
-1. สร้าง `ProductImage` schema, migration และ repository methods
-2. สร้าง `StorageProvider` interface เช่น `save`, `delete`, `getPublicUrl`
-3. ทำ `LocalStorageProvider` ที่เขียนไฟล์ใน `storage/products`
-4. เปิด static route เช่น `/uploads` โดยไม่ expose path อื่นของ filesystem
-5. เพิ่ม multipart upload พร้อมตรวจ MIME type, extension, file size และจำนวนรูปต่อสินค้า
-6. สร้างชื่อไฟล์ใหม่ด้วย UUID และไม่ใช้ชื่อไฟล์จากผู้ใช้เป็น path โดยตรง
-7. สร้าง endpoint เพิ่ม/อ่าน/แก้ลำดับ/ลบรูป และกำหนด primary image ได้เพียงหนึ่งรูปต่อสินค้า
-8. ให้ Product list/detail ส่ง `images` พร้อม `url` ที่สร้างจาก runtime configuration
-9. เมื่อเพิ่ม object-storage provider ใน production ให้เปลี่ยนเฉพาะ provider/config และใช้ `objectKey` เดิมเป็นหลัก
-10. เพิ่ม cleanup กรณี upload สำเร็จแต่บันทึก database ไม่สำเร็จ และกรณีลบ database record แล้วลบไฟล์ไม่สำเร็จ
+- `DELIVERY_EXCHANGE`: default `PENDING`, สร้าง queue, ไม่ตัด stock ตอน create, ตัด stock ตอน `COMPLETED`
+- `WALK_IN_EXCHANGE`: default `COMPLETED`, สร้าง `FULL_OUT` + `EMPTY_IN`
+- `BORROW_CYLINDER`: default `COMPLETED`, สร้าง `LOAN_OUT` + loan
+- `RETURN_CYLINDER`: default `COMPLETED`, สร้าง `LOAN_RETURN` ผ่าน loan workflow
+- `BUY_FULL_TANK`: default `COMPLETED`, สร้าง `FULL_OUT`
+- invalid transition, insufficient stock, inactive product, rollback และ snapshot correctness
 
 เกณฑ์ยอมรับ:
 
-1. Upload รูปสินค้าใน local ได้และไฟล์อยู่ภายใต้ `storage/products`
-2. รูปที่ไม่ใช่ image, ขนาดเกินกำหนด และ path traversal ถูก reject
-3. ลบรูปแล้วไม่สามารถแสดงผ่าน public URL ได้อีก
-4. Product API ส่ง URL ที่ frontend ใช้งานได้โดยไม่ต้องรู้ตำแหน่ง filesystem
-5. เปลี่ยนจาก local provider เป็น R2/S3 ได้โดยไม่ต้องแก้ database contract หรือ ProductService
+- ทุก multi-table write อยู่ใน database transaction เดียว
+- ทุก status change มี status log
+- ทุก stock change มี inventory movement
+- Queue/loan/inventory effects เกิดตาม timing ของ domain เท่านั้น
 
-## 10. Phase 5: Transactions Core
+### Phase C: Queue
 
-เป้าหมาย: ทำ transaction workflow ให้ถูกต้องครบตาม business flow
-
-งานที่ต้องทำ:
-
-1. เพิ่ม validation mapping ระหว่าง `transactionType` และ `itemAction`
-2. ตรวจ required fields ตาม transaction type:
-   - `BORROW_CYLINDER` ควรรองรับ `expectedReturnDate`, `depositAmount`
-   - `RETURN_CYLINDER` ควรผูก loan หรือเกิดผ่าน loan return workflow
-   - `BUY_FULL_TANK` ใช้ `fullTankPrice`
-3. เพิ่ม transaction create tests สำหรับ:
-   - `DELIVERY_EXCHANGE`
-   - `WALK_IN_EXCHANGE`
-   - `BORROW_CYLINDER`
-   - `RETURN_CYLINDER`
-   - `BUY_FULL_TANK`
-4. เพิ่ม status transition tests
-5. เพิ่ม tests ว่า `DELIVERY_EXCHANGE` ไม่ตัด stock ตอน create
-6. เพิ่ม tests ว่า `DELIVERY_EXCHANGE` ตัด stock ตอน `COMPLETED`
-7. เพิ่ม insufficient stock tests
-8. เพิ่ม invalid transition tests
-9. Harden queue number conflict handling เมื่อ concurrent request ชนกัน
+1. สร้าง queue read service จาก `transactions.queueDate/queueNo` โดยไม่สร้าง queue table
+2. Generate queue number ภายใน transaction เดียวกับ transaction creation
+3. รองรับ unique-conflict retry หรือ strategy ที่ปลอดภัยเมื่อ concurrent requests
+4. ให้ queue status action reuse `TransactionService` transition logic
+5. เพิ่ม today/date filter, delivery-only filter และ ordering ด้วย queue number
 
 เกณฑ์ยอมรับ:
 
-1. Transaction ทุกประเภทสร้างได้ถูกต้อง
-2. Snapshot customer/product/price/cost ถูกต้อง
-3. Status logs ถูกสร้างครบ
-4. Inventory movements ถูกสร้างใน timing ที่ถูกต้อง
-5. Final states mutate ต่อไม่ได้
+- Queue number ไม่ซ้ำในวันเดียวกัน
+- Cancelled queue ไม่ตัด stock
+- Completed queue ตัด stockครั้งเดียว
 
-## 11. Phase 6: Queue
+### Phase D: Cylinder Loans
 
-เป้าหมาย: Queue เป็น view/action layer ของ `DELIVERY_EXCHANGE`
-
-งานที่ต้องทำ:
-
-1. เพิ่ม tests สำหรับ `/queues/today`
-2. เพิ่ม tests สำหรับ `/queues?date=...`
-3. เพิ่ม tests สำหรับ update queue status
-4. ตรวจว่า queue list แสดงเฉพาะ `DELIVERY_EXCHANGE`
-5. ตรวจ ordering ด้วย `queueNo`
-6. ตรวจว่า complete queue trigger inventory movements
+1. สร้าง loan list/detail/active queries
+2. Implement partial/full return ผ่าน `TransactionService`
+3. Validate `remainingQuantity = quantity - returnedQuantity`
+4. Partial return อัปเดต `returnedQuantity` และ `PARTIAL_RETURNED`
+5. Full return อัปเดต `RETURNED` และ `returnedDate`
+6. ทุก return สร้าง `RETURN_CYLINDER` transaction และ `LOAN_RETURN` movement
+7. กัน return เกินจำนวนค้างและกัน return loan ที่ปิดแล้ว
 
 เกณฑ์ยอมรับ:
 
-1. Queue รายวันเรียงถูกต้อง
-2. Status update ใช้ status transition rule เดียวกับ transaction
-3. Queue cancelled ไม่ตัด stock
-4. Queue completed ตัด stock ถูกต้อง
+- Active loans แสดงยอดค้างจริง
+- Partial/full return audit ย้อนกลับได้จาก transaction และ movement
+- Loan, transaction และ inventory update atomically
 
-## 12. Phase 7: Cylinder Loans
+### Phase E: Inventory
 
-เป้าหมาย: Loan lifecycle ต้องสะท้อนการยืม/คืนจริงและ audit ได้ครบ
-
-งานที่ต้องทำ:
-
-1. ปิด gap `returnLoan`
-   - validate remaining quantity ไม่ใช่แค่ `loan.quantity`
-   - update `loan_status` เป็น `PARTIAL_RETURNED` หรือ `RETURNED`
-   - set `returned_date` เมื่อคืนครบ
-   - เก็บ transaction history ผ่าน `RETURN_CYLINDER`
-2. ตัดสินใจ data model สำหรับ partial return:
-   - เพิ่ม returned quantity หรือ
-   - คำนวณจาก return transactions ที่อ้าง loan
-3. เพิ่ม tests สำหรับ borrow creates loan
-4. เพิ่ม tests สำหรับ partial return
-5. เพิ่ม tests สำหรับ full return
-6. เพิ่ม tests กัน return เกินจำนวนค้าง
-7. เพิ่ม tests กัน return loan ที่ปิดแล้ว
+1. สร้าง balances/movements read endpoints พร้อม pagination/filter
+2. สร้าง adjustment schema/service/endpoint โดย note เป็น required
+3. ระบุว่า adjustment แต่ละ movement กระทบ `fullQty`, `emptyQty` หรือ `loanedQty` อย่างไม่กำกวม
+4. ใช้ atomic update หรือ row locking เพื่อกัน negative stock/race condition
+5. เพิ่ม tests สำหรับ `FULL_OUT`, `EMPTY_IN`, `LOAN_OUT`, `LOAN_RETURN`, `ADJUSTMENT`
 
 เกณฑ์ยอมรับ:
 
-1. Active loans แสดงรายการค้างจริง
-2. Partial return ลดจำนวนค้างหรือสะท้อนสถานะได้ถูกต้อง
-3. Full return ปิด loan
-4. Return สร้าง transaction history และ inventory movement ครบ
+- Balance ไม่ติดลบจาก concurrent writes
+- ทุก mutation มี movement ที่อ่าน audit ได้
+- Adjustment ไม่ bypass service layer
 
-## 13. Phase 8: Inventory
+### Phase F: Dashboard
 
-เป้าหมาย: Stock balance และ movement ต้องถูกต้องและ audit ได้
-
-งานที่ต้องทำ:
-
-1. เพิ่ม tests สำหรับ `FULL_OUT`, `EMPTY_IN`, `LOAN_OUT`, `LOAN_RETURN`
-2. เพิ่ม tests กัน stock ติดลบ
-3. เพิ่ม tests สำหรับ inventory adjustment
-4. ทบทวน `ADJUSTMENT` movement quantity เมื่อมี delta หลาย field ใน request เดียว
-5. พิจารณา atomic update หรือ row lock เพื่อกัน race condition
-6. เพิ่ม filter movement ตาม date/type ถ้า frontend ต้องใช้
+1. สร้าง read-only `DashboardService`
+2. สรุปยอดขายวันนี้ตาม completed transactions ที่นับเป็นยอดขาย
+3. สรุป queue, active loans และ stock
+4. กำหนด timezone/date boundary เป็น `Asia/Bangkok` หรือ config ที่ชัดเจน
+5. เพิ่ม aggregation และ boundary tests
 
 เกณฑ์ยอมรับ:
 
-1. ทุก stock change มี movement
-2. Balance ไม่ติดลบ
-3. Adjustment ต้องมี note
-4. Movement history อ่าน audit ได้
+- Dashboard ไม่ mutate data
+- ตัวเลข reconcile กับ transaction/loan/inventory source tables ได้
 
-## 14. Phase 9: Dashboard
+### Phase G: API Docs และ Hardening
 
-เป้าหมาย: Dashboard เป็น read-only aggregate ที่ frontend ใช้ได้ทันที
+1. เพิ่ม OpenAPI/Swagger หรือ contract กลางที่ frontend ใช้อ้างอิงได้
+2. รวม request/response/error/pagination และ multipart upload contract
+3. เพิ่ม full workflow integration tests
+4. เพิ่ม graceful shutdown ของ HTTP server/Prisma
+5. ตรวจ query performance และ indexes ของ list/dashboard
+6. รัน `npm audit --audit-level=high`
+7. ย้าย Prisma config ออกจาก `package.json` ก่อน Prisma 7
 
-งานที่ต้องทำ:
+## 7. Checklist เกณฑ์ยอมรับ MVP
 
-1. เพิ่ม tests สำหรับ `/dashboard/today`
-2. ตรวจ timezone/date boundary
-3. ตรวจ today sales นับเฉพาะ completed ที่ต้องนับเป็นยอดขาย
-4. ตรวจ active loans และ stock summary
-5. เพิ่ม DTO documentation สำหรับ frontend
+| ข้อ | เกณฑ์ | สถานะปัจจุบัน | งานที่เหลือ |
+| --- | --- | --- | --- |
+| 1 | Health check ใช้งานได้ | `Done` | เพิ่ม automated integration test |
+| 2 | Standard success/error response | `Done` | เพิ่ม coverage ของ unexpected error/404 |
+| 3 | Admin login และ current user | `Partial` | เพิ่ม HTTP/database integration tests |
+| 4 | Generic role guard | `Partial` | เพิ่ม forbidden/allowed tests |
+| 5 | Product CRUD + soft delete | `Partial` | เพิ่ม integration tests/duplicate policy |
+| 6 | Product ใหม่สร้าง inventory balance | `Partial` | verify กับ PostgreSQL จริง |
+| 7 | Product images ใช้งาน local และเปลี่ยน provider ได้ | `Partial` | เพิ่ม endpoint/file consistency tests |
+| 8 | Transaction create รองรับทุกประเภท | `Todo` | implement TransactionService |
+| 9 | Queue generation/concurrency ถูกต้อง | `Todo` | implement ใน DB transaction |
+| 10 | Delivery ตัด stock เฉพาะตอน complete | `Todo` | implement และ test |
+| 11 | Walk-in/Buy/Borrow effects ถูกต้อง | `Todo` | implement และ test |
+| 12 | Loan partial/full return ถูกต้อง | `Todo` | implement lifecycle |
+| 13 | Status transition/log ถูกต้อง | `Todo` | implement constants/service/tests |
+| 14 | Inventory balance/movement/adjustment ถูกต้อง | `Todo` | implement module และ concurrency protection |
+| 15 | Transaction history/filter ใช้งานได้ | `Todo` | implement read APIs |
+| 16 | Dashboard today ใช้งานได้ | `Todo` | implement read aggregation |
+| 17 | API docs พร้อม frontend | `Partial` | สร้าง contract กลาง/OpenAPI |
+| 18 | Build ผ่าน | `Done` | รักษาใน CI |
+| 19 | Unit tests ปัจจุบันผ่าน | `Done` | 15 tests ผ่าน; เพิ่ม business/integration coverage |
+| 20 | Lint ผ่าน | `Todo` | เพิ่ม ESLint flat config |
+| 21 | Migration/seed ผ่าน local database | `Not verified` | เปิด PostgreSQL แล้วรัน verification |
 
-เกณฑ์ยอมรับ:
-
-1. Dashboard ไม่ mutate data
-2. Dashboard summary ตรงกับ transactions/loans/inventory
-3. Response shape ชัดเจนสำหรับ frontend
-
-## 15. Phase 10: Tests, API Docs และ Hardening
-
-เป้าหมาย: ทำ backend MVP ให้เชื่อถือได้ก่อน frontend integration เต็ม
-
-งานที่ต้องทำ:
-
-1. เพิ่ม unit tests สำหรับ service layer ที่มี business rules
-2. เพิ่ม integration tests ด้วย Supertest สำหรับ endpoint สำคัญ
-3. เพิ่ม OpenAPI/Swagger หรือ contract docs
-4. รัน `npm run build`
-5. รัน `npm test`
-6. รัน `npm run prisma:generate`
-7. ทำ auth smoke test
-8. ตรวจ performance query เบื้องต้นของ list/dashboard
-9. เพิ่ม ESLint v9 flat config (`eslint.config.*`) ก่อนรัน `npm run lint`
-10. เพิ่ม regression test สำหรับ `validate.middleware.ts` เพื่อกัน Express 5 `req.query` getter-only กลับมาเป็น 500 อีก
-
-เกณฑ์ยอมรับ:
-
-1. Build ผ่าน
-2. Lint ผ่านหลังมี ESLint config
-3. Tests สำคัญผ่าน
-4. Frontend มี API contract ใช้งานต่อได้
-5. Known business gaps ถูกปิดหรือระบุเป็น future scope ชัดเจน
-
-## 16. Checklist เกณฑ์ยอมรับ MVP
-
-| ข้อ | เกณฑ์ | สถานะปัจจุบัน | หลักฐานจาก code จริง | งานที่ต้องทำต่อ |
-| --- | --- | --- | --- | --- |
-| 1 | Health check ใช้งานได้ | `Todo` | ไม่พบ `app.ts` หรือ health route | Implement แล้วเพิ่ม smoke test |
-| 2 | Standard success/error response | `Todo` | ไม่พบ response/error utilities | Implement response helpers และ middleware |
-| 3 | Admin login สำเร็จ | `Todo` | ไม่พบ Auth module | Implement แล้วเพิ่ม integration test |
-| 4 | Current user ใช้งานได้ | `Todo` | ไม่พบ `/auth/me` หรือ auth middleware | Implement แล้วเพิ่ม integration test |
-| 5 | Role guard ป้องกัน endpoint ได้ | `Todo` | ไม่พบ role middleware | Implement แล้วเพิ่ม forbidden tests |
-| 6 | Product CRUD + soft delete | `Todo` | ไม่พบ Product module | Implement แล้วเพิ่ม tests |
-| 7 | Product ใหม่สร้าง inventory balance | `Todo` | ไม่พบ ProductService หรือ schema | Implement แล้วเพิ่ม test |
-| 8 | Transaction create รองรับหลายสินค้า | `Todo` | ไม่พบ Transaction module | Implement validation/service และ tests |
-| 9 | `DELIVERY_EXCHANGE` สร้าง queue | `Todo` | ไม่พบ queue generation code | Implement concurrency handling และ tests |
-| 10 | `DELIVERY_EXCHANGE` ไม่ตัด stock ตอน create | `Todo` | ไม่พบ transaction/inventory workflow | Implement rule แล้วเพิ่ม test |
-| 11 | `DELIVERY_EXCHANGE` ตัด stock ตอน complete | `Todo` | ไม่พบ status/inventory workflow | Implement แล้วเพิ่ม insufficient stock tests |
-| 12 | `WALK_IN_EXCHANGE` ตัด stock ทันที | `Todo` | ไม่พบ completed effects | Implement แล้วเพิ่ม test |
-| 13 | `BORROW_CYLINDER` สร้าง loan | `Todo` | ไม่พบ loan creation workflow | Implement แล้วเพิ่ม tests |
-| 14 | `RETURN_CYLINDER` คืนถังและ update loan | `Todo` | ไม่พบ loan return workflow | Implement loan lifecycle update |
-| 15 | `BUY_FULL_TANK` ตัดเฉพาะถังเต็ม | `Todo` | ไม่พบ completed effects | Implement แล้วเพิ่ม test |
-| 16 | Status transition ถูกต้อง | `Todo` | ไม่พบ status constants/service | Implement แล้วเพิ่ม invalid/final-state tests |
-| 17 | Status log ถูกสร้างทุกครั้ง | `Todo` | ไม่พบ status log schema/service | Implement แล้วเพิ่ม tests |
-| 18 | Inventory balance/movement ทำงาน | `Todo` | ไม่พบ Inventory module | Implement แล้วเพิ่ม concurrency/audit tests |
-| 19 | Active loans แสดงรายการค้าง | `Todo` | ไม่พบ Loan repository/service | Implement return lifecycle และ active query |
-| 20 | Dashboard today ใช้งานได้ | `Todo` | ไม่พบ Dashboard module | Implement แล้วเพิ่ม timezone tests |
-| 21 | Transaction history filter ได้ | `Todo` | ไม่พบ Transaction repository/routes | Implement filters ตาม contract |
-| 22 | API docs พร้อม frontend | `Todo` | ยังไม่พบ OpenAPI/Swagger | เพิ่ม API docs หรือ contract รวม product image upload/response |
-| 23 | Tests สำคัญครบ | `Todo` | ไม่พบ test files | เพิ่ม unit/integration tests |
-| 24 | `npm run build` ผ่าน | `Todo` | ไม่ผ่านด้วย `TS18003` เพราะไม่มี TypeScript inputs | เพิ่ม source files แล้วรันใหม่ |
-| 25 | `npm test` ผ่าน | `Todo` | ยังไม่มี test files | เพิ่ม tests แล้วรัน |
-| 26 | `npm run lint` ผ่าน | `Todo` | `npm run lint` ยังรันไม่ได้เพราะไม่มี `eslint.config.*` สำหรับ ESLint v9 | เพิ่ม ESLint flat config แล้วรัน lint |
-| 27 | Product images ใช้งานได้ใน local | `Todo` | ยังไม่มี `ProductImage` หรือ storage implementation | เพิ่ม local provider, upload/delete API และ tests |
-| 28 | Product image เปลี่ยน provider ได้ | `Todo` | ยังไม่มี storage abstraction | เพิ่ม `StorageProvider` และทดสอบด้วย fake provider |
-
-## 17. ความเสี่ยงและวิธีลดความเสี่ยง
+## 8. ความเสี่ยงปัจจุบัน
 
 | ความเสี่ยง | ผลกระทบ | วิธีลดความเสี่ยง |
 | --- | --- | --- |
-| Loan return ไม่ update loan status | รายการยืมค้างผิดและ dashboard เพี้ยน | ปิด gap Phase 7 ก่อน frontend ใช้ return flow |
-| Queue number ชนจาก concurrent requests | สร้างรายการส่งแก๊สล้มเหลวหรือคิวผิด | ใช้ unique constraint + retry/conflict handling |
-| Inventory race condition | Stock ติดลบหรือยอดผิด | ใช้ transaction + atomic update/row lock |
-| Adjustment movement audit ไม่ชัด | ตรวจย้อนหลังไม่ได้ว่า delta ไป balance ไหน | แยก movement หรือเพิ่ม metadata สำหรับ adjustment |
-| Endpoint path ไม่ตรง frontend | Frontend integration สะดุด | ล็อก API contract ใน Phase 0 |
-| เก็บไฟล์ไว้ใน frontend หรือ local disk แบบผูกกับ deployment | รูปหายเมื่อ build/redeploy หรือใช้หลาย instance | เก็บ `objectKey` ใน database และห่อ storage ด้วย provider; local เป็นเพียง MVP provider |
-| URL รูปผูกกับ localhost | Frontend production เรียกรูปไม่ได้ | สร้าง URL จาก `PUBLIC_API_URL`/provider config ตอน response |
-| Upload ไฟล์ไม่ตรวจสอบ | ไฟล์อันตรายหรือใช้พื้นที่เกินควบคุม | จำกัด MIME/ขนาด/จำนวน และสร้างชื่อไฟล์ใหม่ด้วย UUID |
-| ไม่มี tests business-critical | Regression ง่ายตอนต่อ frontend | เพิ่ม tests ก่อนขยาย feature |
-| Date boundary/timezone | Dashboard/queue วันนี้ผิด | กำหนด timezone และเพิ่ม tests |
+| Transaction/queue/loan/inventory modules ยังไม่มี | ยังทำ core MVP workflow ไม่ได้ | ทำ Phase B-E ตามลำดับ ownership ของ `TransactionService` |
+| PostgreSQL ยัง verify ไม่ได้ | schema drift หรือ migration/seed issue อาจยังซ่อนอยู่ | เปิด database และเพิ่ม disposable test database ใน CI |
+| Queue number concurrency | คิวซ้ำหรือ request ล้มเหลว | transaction + unique constraint + retry/locking strategy |
+| Inventory race condition | stock ติดลบหรือ balance ผิด | atomic conditional update/row lock และ concurrency tests |
+| Product image delete แยก DB/file operation | orphan file หรือ state ไม่สอดคล้อง | retry/outbox/cleanup job และ failure tests |
+| ไม่มี integration tests | route/middleware/database mismatch หลุดได้ | เพิ่ม Supertest + test database ก่อนขยาย frontend integration |
+| ไม่มี logger/redaction | debug ยากหรือเสี่ยง log sensitive data | เพิ่ม Pino config และ redact policy |
+| Date/timezone boundary | queue/dashboard วันนี้ผิด | กำหนด timezone policy และ boundary tests |
+| Prisma config deprecation | upgrade Prisma 7 สะดุด | ย้ายไป `prisma.config.ts` |
 
-## 18. รายการที่ไม่อยู่ใน MVP
+## 9. รายการที่ไม่อยู่ใน MVP
 
 1. Payment gateway
 2. Customer master workflow แบบเต็ม
@@ -503,3 +288,4 @@ model ProductImage {
 6. GPS/route planning
 7. LINE/SMS notification
 8. Receipt/print/export
+9. User management UI/API เว้นแต่ยืนยันเพิ่มเข้า MVP
