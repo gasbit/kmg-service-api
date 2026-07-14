@@ -19,13 +19,13 @@ export function validateBody(schema: ZodType) {
 }
 
 export function validateQuery(schema: ZodType) {
-  return (request: Request, _response: Response, next: NextFunction): void => {
+  return (request: Request, response: Response, next: NextFunction): void => {
     const result = schema.safeParse(request.query);
     if (!result.success) {
       next(new AppError(400, ERROR_CODES.VALIDATION_ERROR, "Invalid query parameters", result.error.issues));
       return;
     }
-    request.query = result.data;
+    response.locals.validatedQuery = result.data;
     next();
   };
 }

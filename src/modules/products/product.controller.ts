@@ -9,8 +9,9 @@ const run = (handler: (request: Request, response: Response) => Promise<void>) =
   (request: Request, response: Response, next: NextFunction) => { handler(request, response).catch(next); };
 const param = (request: Request, name: string): string => request.params[name] as string;
 
-export const listProducts = run(async (request, response) => {
-  const result = await service.list(request.query as unknown as ListProductsInput);
+export const listProducts = run(async (_request, response) => {
+  const input = response.locals.validatedQuery as ListProductsInput;
+  const result = await service.list(input);
   response.status(200).json({ success: true, data: { products: result.products }, meta: { requestId: response.locals.requestId as string, pagination: result.pagination } });
 });
 export const getProduct = run(async (request, response) => { sendSuccess(response, await service.get(param(request, "productId"))); });
