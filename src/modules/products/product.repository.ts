@@ -1,4 +1,4 @@
-import { Prisma, type PrismaClient, type ProductImage } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../config/database";
 import type { DatabaseClient, ImageWriteInput, ProductRecord, ProductRepository, ProductWriteInput } from "./product.types";

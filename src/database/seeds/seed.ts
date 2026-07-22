@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 
 import { prisma } from "../../config/database";
 import { env } from "../../config/env";
+import { logger } from "../../config/logger";
 
 async function main(): Promise<void> {
   const adminRole = await prisma.role.upsert({
@@ -32,8 +33,7 @@ async function main(): Promise<void> {
 main()
   .then(() => prisma.$disconnect())
   .catch(async (error: unknown) => {
-    console.error("Database seed failed", error);
+    logger.fatal({ err: error }, "Database seed failed");
     await prisma.$disconnect();
     process.exit(1);
   });
-

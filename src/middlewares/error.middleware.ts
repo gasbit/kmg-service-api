@@ -7,7 +7,11 @@ export const notFoundMiddleware: RequestHandler = (_request, _response, next) =>
   next(new AppError(404, ERROR_CODES.NOT_FOUND, "Route not found"));
 };
 
-export const errorMiddleware: ErrorRequestHandler = (error, _request, response, _next) => {
+export const errorMiddleware: ErrorRequestHandler = (error, request, response, _next) => {
+  if (!(error instanceof AppError)) {
+    request.log.error({ err: error, requestId: response.locals.requestId }, "Unhandled request error");
+  }
+
   const operationalError = error instanceof AppError
     ? error
     : new AppError(500, ERROR_CODES.INTERNAL_ERROR, "Internal server error");
