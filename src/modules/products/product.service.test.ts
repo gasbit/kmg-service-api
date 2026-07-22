@@ -7,7 +7,7 @@ import type { DatabaseClient, ImageWriteInput, ProductRecord, ProductRepository,
 const now = "2026-07-12T03:00:00.000Z";
 const product = (overrides: Partial<ProductRecord> = {}): ProductRecord => ({
   id: "1", brand: "ปตท.", weightKg: "15.00", exchangeCostPrice: "330.00",
-  exchangeSalePrice: "390.00", fullTankPrice: "2450.00", isActive: true,
+  exchangeSalePrice: "390.00", fullTankCostPrice: "1850.00", fullTankPrice: "2450.00", isActive: true,
   images: [], createdAt: now, updatedAt: now, ...overrides
 });
 
@@ -66,7 +66,7 @@ class FakeStorage implements StorageProvider {
 
 const createInput = {
   brand: "ปตท.", weightKg: "15.00", exchangeCostPrice: "330.00",
-  exchangeSalePrice: "390.00", fullTankPrice: "2450.00"
+  exchangeSalePrice: "390.00", fullTankCostPrice: "1850.00", fullTankPrice: "2450.00"
 };
 
 describe("ProductService", () => {
@@ -78,7 +78,7 @@ describe("ProductService", () => {
 
     expect(runSpy).toHaveBeenCalledOnce();
     expect(repository.initialBalanceCreated).toBe(true);
-    expect(result).toMatchObject({ id: "1", brand: "ปตท.", images: [] });
+    expect(result).toMatchObject({ id: "1", brand: "ปตท.", fullTankCostPrice: "1850.00", images: [] });
   });
 
   it("returns stable pagination metadata and public image URLs", async () => {

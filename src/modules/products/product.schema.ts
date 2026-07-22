@@ -25,6 +25,7 @@ export const createProductSchema = z.object({
   weightKg: positiveDecimal2,
   exchangeCostPrice: decimal2,
   exchangeSalePrice: decimal2,
+  fullTankCostPrice: decimal2,
   fullTankPrice: decimal2
 }).strict();
 

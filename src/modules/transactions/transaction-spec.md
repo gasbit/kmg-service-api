@@ -30,7 +30,13 @@ Contract นี้อ้างอิง `AGENTS.md`, `CONTEXT.md`, `Backend-Impl
 
 - Client ไม่ส่ง `status`, `transactionNo`, `queueDate`, `queueNo`, `createdBy`, `completedAt`, `itemAction`, `unitPrice`, `costPrice`, `lineTotal` หรือ `totalAmount` ตอนสร้าง; server derive ค่าเหล่านี้จาก transaction type, authenticated user และ product master
 - ราคาและทุนที่ใช้คำนวณเป็นค่าจาก product ณ เวลาสร้าง เพื่อป้องกัน client กำหนดราคาหรือทุนเอง และถูกเก็บเป็น snapshot
+- `DELIVERY_EXCHANGE` และ `WALK_IN_EXCHANGE` ใช้ `exchangeSalePrice` เป็น `unitPrice` และ `exchangeCostPrice` เป็น `costPrice`
+- `BUY_FULL_TANK` ใช้ `fullTankPrice` เป็น `unitPrice` และ `fullTankCostPrice` เป็น `costPrice`; ห้ามใช้ exchange cost แทนต้นทุนถังเต็ม
+- `BORROW_CYLINDER` ใช้ `unitPrice = 0.00`, `lineTotal = 0.00` และ snapshot `exchangeCostPrice` ไว้ใน `costPrice` เพื่อเป็นมูลค่าอ้างอิงเท่านั้น ไม่ใช่ต้นทุนขาย
+- `lineTotal = quantity * unitPrice` และ `totalAmount` เป็นผลรวม line totals โดยคำนวณด้วย decimal arithmetic ฝั่ง server
 - `BORROW_CYLINDER` เก็บ `expectedReturnDate` และ `depositAmount` แยกต่อ item เพราะ database สร้างหนึ่ง loan ต่อ transaction item
+- `depositAmount` เป็นข้อมูลของ loan ไม่รวมใน `lineTotal`, `totalAmount`, Dashboard sales หรือต้นทุนขาย
+- MVP ไม่รองรับ discount, client price override หรือ cost override และต้อง reject server-owned monetary fields ใน create payload
 - `customerId` ยังไม่รับจาก client ใน MVP เพราะยังไม่มี customer master workflow; response ยังคงมี field นี้เป็น nullable เพื่อรองรับข้อมูลที่อาจเชื่อม customer ในอนาคต โดย snapshot fields เป็น source of truth สำหรับ history
 - `PATCH /api/transactions/{transactionId}/status` เป็น status transition หลัก ส่วน `POST /api/transactions/{transactionId}/cancel` เป็น convenience action ที่มีผลเท่ากับ transition ไป `CANCELLED`
 - วันที่ queue และตัวกรองแบบ date ตีความตามเขตเวลา `Asia/Bangkok`
@@ -66,6 +72,8 @@ IN_PROGRESS -> CANCELLED
 ```
 
 `COMPLETED` และ `CANCELLED` เป็น final state ทุกการสร้างและเปลี่ยนสถานะต้องมี status log การ complete `DELIVERY_EXCHANGE` สร้าง stock effects เพียงครั้งเดียว ส่วนการ cancel ไม่สร้าง stock movement
+
+Sales aggregation ในอนาคตต้องนับเฉพาะ transaction สถานะ `COMPLETED` ของ `DELIVERY_EXCHANGE`, `WALK_IN_EXCHANGE` และ `BUY_FULL_TANK` เท่านั้น โดยไม่รวม borrow, return, cancellation หรือ deposit ส่วน `costPrice` ของ borrow เป็น valuation snapshot และห้ามนำไปคำนวณ gross profit
 
 ## 6. OpenAPI 3.1 contract
 
@@ -1160,26 +1168,33 @@ security:
 
 ## 7. Assumptions and unresolved decisions
 
-Assumptions used by this proposed contract:
+Approved monetary decisions:
+
+- Exchange ใช้ exchange sale/cost จาก Product
+- Buy full tank ใช้ full-tank sale/cost จาก Product ซึ่งมี `fullTankCostPrice` แยกจาก exchange cost
+- Borrow ไม่มียอดขาย แต่เก็บ exchange cost เป็น valuation snapshot
+- Deposit แยกอยู่บน loan และไม่รวม transaction total หรือ Dashboard sales
+- MVP ไม่มี discount, price override หรือ cost override
+
+Other assumptions used by this proposed contract:
 
 - `customerName` is required for every client-created transaction; `customerAddress` is additionally required for `DELIVERY_EXCHANGE`
 - `expectedReturnDate` is optional because Prisma allows null, despite an older frontend document describing it as required
 - `depositAmount` defaults to `"0.00"` when omitted
-- There is no client price override or discount in MVP
 - `POST /api/transactions/{transactionId}/cancel` accepts an omitted body; when present, the body must contain only optional `note`
 
 Consequential decisions still requiring product approval before implementation:
 
-1. Whether sale price overrides or discounts are needed. Adding them later is compatible if optional, but it changes total calculation rules.
-2. Whether `expectedReturnDate` should be mandatory for every borrowed item.
-3. Whether the separate cancel endpoint should remain, since the status endpoint already supports `CANCELLED`.
-4. The exact transaction number generation and retry strategy. The public contract only guarantees uniqueness and the example format, not the algorithm.
-5. Whether history search must include address or item product snapshots; this contract limits search to transaction number, customer name, and phone.
+1. Whether `expectedReturnDate` should be mandatory for every borrowed item.
+2. Whether the separate cancel endpoint should remain, since the status endpoint already supports `CANCELLED`.
+3. The exact transaction number generation and retry strategy. The public contract only guarantees uniqueness and the example format, not the algorithm.
+4. Whether history search must include address or item product snapshots; this contract limits search to transaction number, customer name, and phone.
 
 ## 8. Implementation and compatibility notes
 
 - **Major implementation gap:** transaction module and every operation in this contract are not implemented yet.
 - **Major documentation conflict:** older architecture/business-flow documents use `/api/v1`; this contract follows the current unversioned `/api` application convention.
 - **Major documentation conflict:** an older frontend document expects client-supplied `unitPrice` and `costPrice`; this contract derives them on the server to preserve trustworthy snapshots. Implementing the older form shape instead would be a breaking request-contract change.
+- Product master now requires a dedicated `fullTankCostPrice`; existing rows are initially backfilled from `exchangeCostPrice` by migration and must be reviewed before relying on full-tank profit reporting.
 - **Major workflow constraint:** direct generic creation of `RETURN_CYLINDER` is intentionally excluded. The loan return endpoint must create it through `TransactionService`; accepting it here without a loan reference would permit inconsistent loan state.
 - This is a new, unimplemented contract, so it does not break an existing transaction API. Once implemented, changing path versioning, decimal serialization, required snapshot fields, status transitions, pagination ordering, or side-effect timing must be treated as potentially breaking.

@@ -13,6 +13,7 @@ function serializeProduct(product: ProductWithImages): ProductRecord {
     weightKg: product.weightKg.toFixed(2),
     exchangeCostPrice: product.exchangeCostPrice.toFixed(2),
     exchangeSalePrice: product.exchangeSalePrice.toFixed(2),
+    fullTankCostPrice: product.fullTankCostPrice.toFixed(2),
     fullTankPrice: product.fullTankPrice.toFixed(2),
     isActive: product.isActive,
     images: product.images.map((image) => ({

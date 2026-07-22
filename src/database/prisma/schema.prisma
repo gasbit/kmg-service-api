@@ -59,6 +59,7 @@ model Product {
   weightKg          Decimal  @map("weight_kg") @db.Decimal(10, 2)
   exchangeCostPrice Decimal  @map("exchange_cost_price") @db.Decimal(12, 2)
   exchangeSalePrice Decimal  @map("exchange_sale_price") @db.Decimal(12, 2)
+  fullTankCostPrice Decimal  @map("full_tank_cost_price") @db.Decimal(12, 2)
   fullTankPrice     Decimal  @map("full_tank_price") @db.Decimal(12, 2)
   isActive          Boolean  @default(true) @map("is_active")
   createdAt         DateTime @default(now()) @map("created_at")

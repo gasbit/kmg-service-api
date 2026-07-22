@@ -46,6 +46,7 @@ Contract นี้อ้างอิง `AGENTS.md`, `CONTEXT.md`, `Backend-Impl
   "weightKg": "15.00",
   "exchangeCostPrice": "330.00",
   "exchangeSalePrice": "390.00",
+  "fullTankCostPrice": "1850.00",
   "fullTankPrice": "2450.00",
   "isActive": true,
   "images": [
@@ -119,6 +120,7 @@ Content-Type: `application/json`
 | `weightKg` | decimal string | Yes | `> 0`, ไม่เกิน 2 decimal places |
 | `exchangeCostPrice` | decimal string | Yes | `>= 0`, ไม่เกิน 2 decimal places |
 | `exchangeSalePrice` | decimal string | Yes | `>= 0`, ไม่เกิน 2 decimal places |
+| `fullTankCostPrice` | decimal string | Yes | `>= 0`, ไม่เกิน 2 decimal places; ต้นทุนถังเต็มรวมตัวถังที่ใช้ snapshot สำหรับ `BUY_FULL_TANK` |
 | `fullTankPrice` | decimal string | Yes | `>= 0`, ไม่เกิน 2 decimal places |
 
 `isActive` ไม่รับจาก client และเริ่มต้นเป็น `true` เสมอ การสร้าง Product และ InventoryBalance (`fullQty = 0`, `emptyQty = 0`, `loanedQty = 0`) ต้องสำเร็จหรือล้มเหลวพร้อมกัน
@@ -270,6 +272,7 @@ paths:
               weightKg: '15.00'
               exchangeCostPrice: '330.00'
               exchangeSalePrice: '390.00'
+              fullTankCostPrice: '1850.00'
               fullTankPrice: '2450.00'
       responses:
         '201':
@@ -470,16 +473,18 @@ components:
         weightKg: { $ref: '#/components/schemas/PositiveDecimal2' }
         exchangeCostPrice: { $ref: '#/components/schemas/Decimal2' }
         exchangeSalePrice: { $ref: '#/components/schemas/Decimal2' }
+        fullTankCostPrice: { $ref: '#/components/schemas/Decimal2' }
         fullTankPrice: { $ref: '#/components/schemas/Decimal2' }
     CreateProductRequest:
       type: object
       additionalProperties: false
-      required: [brand, weightKg, exchangeCostPrice, exchangeSalePrice, fullTankPrice]
+      required: [brand, weightKg, exchangeCostPrice, exchangeSalePrice, fullTankCostPrice, fullTankPrice]
       properties:
         brand: { type: string, minLength: 1, maxLength: 100 }
         weightKg: { $ref: '#/components/schemas/PositiveDecimal2' }
         exchangeCostPrice: { $ref: '#/components/schemas/Decimal2' }
         exchangeSalePrice: { $ref: '#/components/schemas/Decimal2' }
+        fullTankCostPrice: { $ref: '#/components/schemas/Decimal2' }
         fullTankPrice: { $ref: '#/components/schemas/Decimal2' }
     UpdateProductRequest:
       type: object
@@ -490,6 +495,7 @@ components:
         weightKg: { $ref: '#/components/schemas/PositiveDecimal2' }
         exchangeCostPrice: { $ref: '#/components/schemas/Decimal2' }
         exchangeSalePrice: { $ref: '#/components/schemas/Decimal2' }
+        fullTankCostPrice: { $ref: '#/components/schemas/Decimal2' }
         fullTankPrice: { $ref: '#/components/schemas/Decimal2' }
         isActive: { type: boolean }
     ProductImage:
@@ -509,13 +515,14 @@ components:
     Product:
       type: object
       additionalProperties: false
-      required: [id, brand, weightKg, exchangeCostPrice, exchangeSalePrice, fullTankPrice, isActive, images, createdAt, updatedAt]
+      required: [id, brand, weightKg, exchangeCostPrice, exchangeSalePrice, fullTankCostPrice, fullTankPrice, isActive, images, createdAt, updatedAt]
       properties:
         id: { $ref: '#/components/schemas/BigIntId' }
         brand: { type: string, maxLength: 100 }
         weightKg: { $ref: '#/components/schemas/PositiveDecimal2' }
         exchangeCostPrice: { $ref: '#/components/schemas/Decimal2' }
         exchangeSalePrice: { $ref: '#/components/schemas/Decimal2' }
+        fullTankCostPrice: { $ref: '#/components/schemas/Decimal2' }
         fullTankPrice: { $ref: '#/components/schemas/Decimal2' }
         isActive: { type: boolean }
         images:
@@ -683,4 +690,3 @@ components:
 - การกำหนด primary รูปเดียวเป็น atomic
 - ไม่มี response ใดเปิดเผย object key, filesystem path หรือ stack trace
 - เพิ่ม unit/integration tests สำหรับ create, list/filter, update, deactivate, upload, primary selection และ cleanup failure
-

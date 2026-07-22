@@ -20,6 +20,7 @@ export interface ProductDto {
   weightKg: string;
   exchangeCostPrice: string;
   exchangeSalePrice: string;
+  fullTankCostPrice: string;
   fullTankPrice: string;
   isActive: boolean;
   images: ProductImageDto[];
@@ -51,6 +52,7 @@ export interface ProductWriteInput {
   weightKg: string;
   exchangeCostPrice: string;
   exchangeSalePrice: string;
+  fullTankCostPrice: string;
   fullTankPrice: string;
 }
 
