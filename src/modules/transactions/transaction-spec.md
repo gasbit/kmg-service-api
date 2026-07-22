@@ -35,11 +35,18 @@ Contract นี้อ้างอิง `AGENTS.md`, `CONTEXT.md`, `Backend-Impl
 - `BORROW_CYLINDER` ใช้ `unitPrice = 0.00`, `lineTotal = 0.00` และ snapshot `exchangeCostPrice` ไว้ใน `costPrice` เพื่อเป็นมูลค่าอ้างอิงเท่านั้น ไม่ใช่ต้นทุนขาย
 - `lineTotal = quantity * unitPrice` และ `totalAmount` เป็นผลรวม line totals โดยคำนวณด้วย decimal arithmetic ฝั่ง server
 - `BORROW_CYLINDER` เก็บ `expectedReturnDate` และ `depositAmount` แยกต่อ item เพราะ database สร้างหนึ่ง loan ต่อ transaction item
+- `expectedReturnDate` เป็น optional เนื่องจากลูกค้ายืมถังไปใช้จนหมดและร้านเป็นผู้ติดตามรับถังคืนเอง รายการที่ไม่ระบุวันคืนต้องติดตามจาก `borrowedDate` และจำนวนที่ยังไม่คืนแทน
+- หากระบุ `expectedReturnDate` ระบบจึงค่อยใช้วันดังกล่าวสำหรับ due/overdue display; loan ที่ไม่มีวันคืนห้ามถูกจัดเป็น overdue จากวันที่โดยอัตโนมัติ
 - `depositAmount` เป็นข้อมูลของ loan ไม่รวมใน `lineTotal`, `totalAmount`, Dashboard sales หรือต้นทุนขาย
 - MVP ไม่รองรับ discount, client price override หรือ cost override และต้อง reject server-owned monetary fields ใน create payload
+- `items` ของ public create payload ห้ามมี `productId` ซ้ำ Frontend ต้องเพิ่ม `quantity` บน item เดิมเมื่อเลือกสินค้าเดิมซ้ำ ส่วน Backend ต้องตรวจซ้ำและคืน `400 VALIDATION_ERROR` โดยชี้ไปยัง item ที่ซ้ำ
+- แม้ public payload จะห้าม Product ซ้ำ TransactionService ยังต้อง aggregate required quantity ต่อ Product ก่อนตรวจและเปลี่ยน stock เพื่อป้องกัน internal caller หรือ future workflow ทำให้ยอด stock ผิด
 - `customerId` ยังไม่รับจาก client ใน MVP เพราะยังไม่มี customer master workflow; response ยังคงมี field นี้เป็น nullable เพื่อรองรับข้อมูลที่อาจเชื่อม customer ในอนาคต โดย snapshot fields เป็น source of truth สำหรับ history
 - `PATCH /api/transactions/{transactionId}/status` เป็น status transition หลัก ส่วน `POST /api/transactions/{transactionId}/cancel` เป็น convenience action ที่มีผลเท่ากับ transition ไป `CANCELLED`
 - วันที่ queue และตัวกรองแบบ date ตีความตามเขตเวลา `Asia/Bangkok`
+- `queueNo` เริ่มที่ `1` ใหม่ทุก business date ตาม `Asia/Bangkok` และต้อง generate ภายใน database transaction
+- `transactionNo` ใช้รูปแบบ `TX-YYYYMMDD-NNNN` โดยวันที่มาจาก `Asia/Bangkok`, sequence ใช้ร่วมกันทุก transaction type และเริ่มใหม่ทุก business date; suffix มีอย่างน้อย 4 หลักและขยายเกิน `9999` ได้ เช่น `TX-20260722-10000`
+- Transaction number ต้อง generate ภายใน database transaction หลังถือ transaction-scoped advisory lock ของ business date, คง database unique constraint เป็น safety net และห้ามนำเลขของรายการที่ยกเลิกกลับมาใช้ใหม่
 - Transaction history เรียง `createdAt DESC, id DESC` และ filters ทั้งหมด combine ด้วย AND; `search` ค้นแบบ case-insensitive partial match ด้วย OR ใน `transactionNo`, `customerName` และ `customerPhone`
 
 ## 4. Endpoint summary
@@ -1179,16 +1186,16 @@ Approved monetary decisions:
 Other assumptions used by this proposed contract:
 
 - `customerName` is required for every client-created transaction; `customerAddress` is additionally required for `DELIVERY_EXCHANGE`
-- `expectedReturnDate` is optional because Prisma allows null, despite an older frontend document describing it as required
+- `expectedReturnDate` is optional ตาม workflow จริงที่ลูกค้ายืมถังไปใช้จนหมดและร้านติดตามรับคืนเอง; Prisma จึงคง nullable
 - `depositAmount` defaults to `"0.00"` when omitted
+- Product หนึ่งรายการปรากฏได้ไม่เกินหนึ่งครั้งใน public create payload; quantity เป็นยอดรวมของ Product นั้นใน transaction
 - `POST /api/transactions/{transactionId}/cancel` accepts an omitted body; when present, the body must contain only optional `note`
 
-Consequential decisions still requiring product approval before implementation:
+Approved endpoint and search decisions:
 
-1. Whether `expectedReturnDate` should be mandatory for every borrowed item.
-2. Whether the separate cancel endpoint should remain, since the status endpoint already supports `CANCELLED`.
-3. The exact transaction number generation and retry strategy. The public contract only guarantees uniqueness and the example format, not the algorithm.
-4. Whether history search must include address or item product snapshots; this contract limits search to transaction number, customer name, and phone.
+- คงทั้ง status endpoint และ convenience cancel endpoint โดยให้ทั้งคู่ใช้ status-transition workflow เดียวกัน
+- History search ของ MVP จำกัดที่ transaction number, customer name และ customer phone ไม่รวม address หรือ product snapshots
+- Queue number เริ่มที่ 1 ใหม่ทุก business date ตาม `Asia/Bangkok` และ generate ภายใน database transaction
 
 ## 8. Implementation and compatibility notes
 

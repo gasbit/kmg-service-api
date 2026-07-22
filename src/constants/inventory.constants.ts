@@ -1,0 +1,10 @@
+export const INVENTORY_MOVEMENT_TYPES = {
+  FULL_OUT: "FULL_OUT",
+  EMPTY_IN: "EMPTY_IN",
+  LOAN_OUT: "LOAN_OUT",
+  LOAN_RETURN: "LOAN_RETURN",
+  ADJUSTMENT: "ADJUSTMENT"
+} as const;
+
+export type InventoryMovementType =
+  (typeof INVENTORY_MOVEMENT_TYPES)[keyof typeof INVENTORY_MOVEMENT_TYPES];
