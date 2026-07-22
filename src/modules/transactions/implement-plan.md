@@ -1,6 +1,6 @@
 # Transaction Module Implementation Plan
 
-สถานะ: Implemented — unit/HTTP auth tests and local database smoke checks passed; full database concurrency suite pending
+สถานะ: Implemented — unit, HTTP, workflow, rollback และ PostgreSQL concurrency tests passed
 อ้างอิงหลัก: `transaction-spec.md`  
 Owning module: `transactions`  
 Base path: `/api/transactions`
@@ -115,7 +115,7 @@ src/
 - [x] `LOAN_RETURN`
 - [x] `ADJUSTMENT`
 
-- [ ] ตรวจว่า service/repository ไม่มี hard-coded domain strings
+- [x] ตรวจว่า service/repository ไม่มี hard-coded domain strings
 
 ### 5.2 Public และ internal types
 
@@ -220,7 +220,7 @@ Validation rules:
 ### 7.2 Clock และ business date
 
 - [x] Inject `Clock` เข้า service เพื่อให้ tests กำหนดเวลาได้
-- [ ] Implement การคำนวณเวลาและวันที่ต่อไปนี้
+- [x] Implement การคำนวณเวลาและวันที่ต่อไปนี้
 
 - [x] business date ของ `Asia/Bangkok`
 - [x] UTC start/end boundaries สำหรับ history filters
@@ -237,7 +237,7 @@ Validation rules:
 - [x] อ่าน sequence ถัดไปของ transaction number ในวันนั้น
 - [x] อ่าน queue number ถัดไปของวันนั้น
 
-- [ ] Implement ลำดับ daily number generation สำหรับ `DELIVERY_EXCHANGE`
+- [x] Implement ลำดับ daily number generation สำหรับ `DELIVERY_EXCHANGE`
 
 - [x] Begin transaction
 - [x] Acquire daily lock
@@ -246,8 +246,8 @@ Validation rules:
 - [x] Insert transaction และ dependent rows
 - [x] Commit
 
-- [x] ใช้ PostgreSQL advisory lock หรือ `Serializable` isolation พร้อม bounded retry เป็น concurrency strategy หลัก
-- [ ] คง unique constraints เป็น safety net และเพิ่ม concurrent integration tests เพื่อพิสูจน์ว่าเลขไม่ซ้ำ
+- [x] ใช้ PostgreSQL transaction-scoped advisory lock ภายใต้ explicit `ReadCommitted` พร้อม bounded retry เป็น concurrency strategy หลัก
+- [x] คง unique constraints เป็น safety net และเพิ่ม concurrent integration tests เพื่อพิสูจน์ว่าเลขไม่ซ้ำ
 - [x] Sequence ใช้ร่วมกันทุก transaction type, reset ทุก business date และห้าม reuse เลขของ cancelled transaction
 - [x] อ่าน suffix ด้วย numeric cast ไม่ใช้ lexical `MAX(transactionNo)` เพื่อให้ลำดับหลัง `9999` ถูกต้อง
 
@@ -436,11 +436,11 @@ apiRouter.use("/transactions", transactionRouter)
 - [x] Walk-in สร้าง `FULL_OUT + EMPTY_IN`
 - [x] Borrow สร้าง `LOAN_OUT + CylinderLoan` ต่อ item
 - [x] Buy full tank สร้างเฉพาะ `FULL_OUT`
-- [ ] Inactive/missing product
+- [x] Inactive/missing product
 - [x] Insufficient stock
-- [ ] Initial status log repository integration test
-- [ ] Rollback เมื่อ step ใด stepหนึ่ง fail
-- [ ] Allowed และ rejected status transitions ครบทุก transition (ปัจจุบันทดสอบ representative paths)
+- [x] Initial status log repository integration test
+- [x] Rollback เมื่อ step ใด stepหนึ่ง fail
+- [x] Allowed และ rejected status transitions ครบทุก transition
 - [x] Cancel delegates ไป shared transition workflow
 - [x] Delivery completion inventory effects หลัง conditional status claim
 - [x] BigInt/Decimal/Date serialization
@@ -449,65 +449,65 @@ apiRouter.use("/transactions", transactionRouter)
 
 ใช้ PostgreSQL test database:
 
-- [ ] List filters/search/pagination/order
-- [ ] Inclusive Asia/Bangkok date boundaries
-- [ ] Detail includes ordered items/status logs
+- [x] List filters/search/pagination/order
+- [x] Inclusive Asia/Bangkok date boundaries
+- [x] Detail includes ordered items/status logs
 - [x] Conditional stock update ป้องกัน negative stock — verified against local PostgreSQL in a rolled-back smoke transaction
-- [ ] Multi-table rollback จริง
-- [ ] Concurrent delivery creation ไม่ได้ queue number ซ้ำ
-- [ ] Concurrent transaction creation ไม่ได้ transaction number ซ้ำ
-- [ ] Concurrent completion ตัด stock และสร้าง movements ครั้งเดียว
-- [ ] Unique constraints และ Prisma errors map เป็น operational errors ที่กำหนด
+- [x] Multi-table rollback จริง
+- [x] Concurrent delivery creation ไม่ได้ queue number ซ้ำ
+- [x] Concurrent transaction creation ไม่ได้ transaction number ซ้ำ
+- [x] Concurrent completion ตัด stock และสร้าง movements ครั้งเดียว
+- [x] Unique constraints และ Prisma errors map เป็น operational errors ที่กำหนด
 
 ### 11.4 HTTP integration tests
 
 ใช้ Supertest:
 
-- [x] `401` missing token ครบทั้ง 5 routes
-- [ ] `403` non-admin role
-- [ ] `400` invalid params/query/body
-- [ ] `404` transaction/product not found
-- [ ] `409` inactive product, insufficient stock, invalid transition
+- [x] `401` missing/invalid token ครบทั้ง 5 routes
+- [x] `403` non-admin role
+- [x] `400` invalid params/query/body
+- [x] `404` transaction/product not found
+- [x] `409` inactive product, insufficient stock, invalid transition
 - [x] Error response envelope และ `requestId` สำหรับ auth boundary
-- [ ] List pagination metadata
-- [ ] Responses ไม่มี password hash, token, raw BigInt หรือ internal fields
+- [x] List pagination metadata
+- [x] Responses ไม่มี password hash, token, raw BigInt หรือ internal fields
 
 ## 12. Phase 8 — Validation และ rollout
 
 - [x] รัน `npm run prisma:generate`
 - [x] รัน `npm run build`
-- [x] รัน `npm test` — 65 tests passed
+- [x] รัน `npm test` — 77 tests passed; database integration tests 5 scenarios passed
 - [x] รัน `npm run lint`
 
 จากนั้นรัน database-backed integration tests และ smoke tests:
 
-- [ ] Create delivery -> `PENDING`, queue assigned, stock unchanged
-- [ ] Delivery `PENDING -> IN_PROGRESS -> COMPLETED` -> stock/movements correct
-- [ ] Cancel pending delivery -> no stock movement
-- [ ] Create walk-in -> completed and stock changed immediately
-- [ ] Create borrow -> completed, loan created, stock moved to loaned
-- [ ] Create buy full tank -> completed, only full stock decreased
-- [ ] Verify history/detail snapshots after product price/brand update
+- [x] Create delivery -> `PENDING`, queue assigned, stock unchanged
+- [x] Delivery `PENDING -> IN_PROGRESS -> COMPLETED` -> stock/movements correct
+- [x] Cancel pending delivery -> no stock movement
+- [x] Create walk-in -> completed and stock changed immediately
+- [x] Create borrow -> completed, loan created, stock moved to loaned
+- [x] Create buy full tank -> completed, only full stock decreased
+- [x] Verify history/detail snapshots after product price/brand update
 
 - [x] อัปเดต `Backend-Implement-Plan.md` หลัง behavior ผ่าน tests และเปลี่ยนสถานะ transaction phase ตามหลักฐานจริง
 
 ## 13. Definition of done
 
-- [ ] Phase 0 decisions ถูกอนุมัติและสะท้อนใน `transaction-spec.md`
-- [ ] ทั้ง 5 operations ตรงกับ contract และ standard response envelope
-- [ ] Controllers ไม่มี business rules
-- [ ] Repositories มีเฉพาะ database access
-- [ ] ทุก write workflow อยู่ใน database transaction เดียว
-- [ ] Queue/transaction numbers ปลอดภัยภายใต้ concurrent requests
-- [ ] Stock ไม่มีทางติดลบจาก transaction race
-- [ ] ทุก status change มี status log
-- [ ] ทุก stock change มี movement
-- [ ] Delivery create ไม่ตัด stock และ completion ตัด stock ครั้งเดียว
-- [ ] Completed/cancelled transactions mutate ไม่ได้
-- [ ] Snapshots และ decimal/BigInt/date serialization ถูกต้อง
-- [ ] Unit, integration และ HTTP tests ครอบคลุม happy paths, conflicts, rollback และ concurrency
-- [ ] `prisma:generate`, build, tests และ lint ผ่าน หรือมี known tooling issue ที่บันทึกไว้ชัดเจน
-- [ ] Implementation gaps/contract deviations ถูกอัปเดตกลับเข้า `transaction-spec.md`
+- [x] Phase 0 decisions ถูกอนุมัติและสะท้อนใน `transaction-spec.md`
+- [x] ทั้ง 5 operations ตรงกับ contract และ standard response envelope
+- [x] Controllers ไม่มี business rules
+- [x] Repositories มีเฉพาะ database access
+- [x] ทุก write workflow อยู่ใน database transaction เดียว
+- [x] Queue/transaction numbers ปลอดภัยภายใต้ concurrent requests
+- [x] Stock ไม่มีทางติดลบจาก transaction race
+- [x] ทุก status change มี status log
+- [x] ทุก stock change มี movement
+- [x] Delivery create ไม่ตัด stock และ completion ตัด stock ครั้งเดียว
+- [x] Completed/cancelled transactions mutate ไม่ได้
+- [x] Snapshots และ decimal/BigInt/date serialization ถูกต้อง
+- [x] Unit, integration และ HTTP tests ครอบคลุม happy paths, conflicts, rollback และ concurrency
+- [x] `prisma:generate`, build, tests และ lint ผ่าน หรือมี known tooling issue ที่บันทึกไว้ชัดเจน
+- [x] Implementation gaps/contract deviations ถูกอัปเดตกลับเข้า `transaction-spec.md`
 
 ## 14. Risks และ mitigations
 

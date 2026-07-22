@@ -233,7 +233,7 @@ export class PrismaTransactionRunner implements TransactionRunner {
     let lastError: unknown;
     for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
       try {
-        return await this.database.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        return await this.database.$transaction(work, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
       } catch (error) {
         lastError = error;
         if (!isRetryableWriteError(error) || attempt === this.maxAttempts) throw error;

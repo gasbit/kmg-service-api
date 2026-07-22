@@ -4,6 +4,12 @@ import { describe, expect, it } from "vitest";
 import { app } from "../../app";
 
 describe("transaction routes", () => {
+  it("rejects an invalid bearer token", async () => {
+    const response = await request(app).get("/api/transactions").set("Authorization", "Bearer invalid-token");
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("UNAUTHORIZED");
+  });
+
   it.each([
     ["get", "/api/transactions"],
     ["get", "/api/transactions/1"],

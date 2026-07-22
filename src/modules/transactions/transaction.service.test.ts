@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INVENTORY_MOVEMENT_TYPES } from "../../constants/inventory.constants";
-import { TRANSACTION_STATUSES, TRANSACTION_TYPES, type TransactionStatus } from "../../constants/transaction.constants";
+import { ITEM_ACTIONS, TRANSACTION_STATUSES, TRANSACTION_TYPES, type TransactionStatus } from "../../constants/transaction.constants";
 import { AppError } from "../../shared/errors/app-error";
 import type { AuthenticatedRequestUser } from "../../shared/types/auth.types";
 import type { Clock } from "../../shared/utils/date";
@@ -70,6 +70,37 @@ function detailFrom(input: CreateTransactionRecordInput, status = input.status):
     cylinderLoans: undefined as never,
     customer: undefined as never
   } as TransactionDetailRecord;
+}
+
+function statusDetail(status: TransactionStatus): TransactionDetailRecord {
+  return detailFrom({
+    transactionNo: "TX-20260722-0001",
+    transactionType: TRANSACTION_TYPES.DELIVERY_EXCHANGE,
+    status,
+    queueDate: new Date("2026-07-22T00:00:00.000Z"),
+    queueNo: 1,
+    customerName: "Customer",
+    customerPhone: null,
+    customerAddress: "Address",
+    totalAmount: new Prisma.Decimal("780.00"),
+    note: null,
+    createdBy: 1n,
+    completedAt: status === TRANSACTION_STATUSES.COMPLETED ? now : null,
+    changedAt: now,
+    items: [{
+      productId: 42n,
+      productBrandSnapshot: "Brand",
+      productWeightSnapshot: new Prisma.Decimal("15.00"),
+      quantity: 2,
+      unitPrice: new Prisma.Decimal("390.00"),
+      costPrice: new Prisma.Decimal("330.00"),
+      lineTotal: new Prisma.Decimal("780.00"),
+      itemAction: ITEM_ACTIONS.EXCHANGE,
+      note: null,
+      expectedReturnDate: null,
+      depositAmount: new Prisma.Decimal(0)
+    }]
+  }, status);
 }
 
 function setup() {
@@ -202,6 +233,53 @@ describe("TransactionService create workflows", () => {
     }, user)).rejects.toMatchObject({ code: "INSUFFICIENT_STOCK" });
     expect(repository.createMovements).not.toHaveBeenCalled();
   });
+
+  it("rejects a missing product before creating a transaction", async () => {
+    const { repository, service } = setup();
+    repository.findProducts.mockResolvedValue([]);
+    await expect(service.create({
+      transactionType: TRANSACTION_TYPES.WALK_IN_EXCHANGE,
+      customerName: "Customer",
+      items: [{ productId: "999", quantity: 1 }]
+    }, user)).rejects.toMatchObject({ statusCode: 404, code: "NOT_FOUND" });
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an inactive product before creating a transaction", async () => {
+    const { repository, service } = setup();
+    repository.findProducts.mockImplementation(async (ids: bigint[]) => ids.map((id) => ({
+      id,
+      brand: "Inactive",
+      weightKg: new Prisma.Decimal("15.00"),
+      exchangeCostPrice: new Prisma.Decimal("330.00"),
+      exchangeSalePrice: new Prisma.Decimal("390.00"),
+      fullTankCostPrice: new Prisma.Decimal("1850.00"),
+      fullTankPrice: new Prisma.Decimal("2450.00"),
+      isActive: false
+    })));
+    await expect(service.create({
+      transactionType: TRANSACTION_TYPES.BUY_FULL_TANK,
+      customerName: "Customer",
+      items: [{ productId: "42", quantity: 1 }]
+    }, user)).rejects.toMatchObject({ statusCode: 409, code: "CONFLICT" });
+    expect(repository.create).not.toHaveBeenCalled();
+  });
+
+  it("maps an exhausted unique-number race to an operational conflict", async () => {
+    const { repository } = setup();
+    const uniqueError = new Prisma.PrismaClientKnownRequestError("Unique constraint", {
+      code: "P2002",
+      clientVersion: "test"
+    });
+    const failingRunner: TransactionRunner = { run: async () => { throw uniqueError; } };
+    const service = new TransactionService(repository as unknown as TransactionRepository, failingRunner, clock);
+    await expect(service.create({
+      transactionType: TRANSACTION_TYPES.DELIVERY_EXCHANGE,
+      customerName: "Customer",
+      customerAddress: "Address",
+      items: [{ productId: "42", quantity: 1 }]
+    }, user)).rejects.toMatchObject({ statusCode: 409, code: "CONFLICT" });
+  });
 });
 
 describe("TransactionService status workflows", () => {
@@ -273,5 +351,34 @@ describe("TransactionService status workflows", () => {
       status: TRANSACTION_STATUSES.CANCELLED,
       note: "Customer cancelled"
     }, user);
+  });
+
+  it.each([
+    [TRANSACTION_STATUSES.PENDING, TRANSACTION_STATUSES.IN_PROGRESS, true],
+    [TRANSACTION_STATUSES.PENDING, TRANSACTION_STATUSES.CANCELLED, true],
+    [TRANSACTION_STATUSES.IN_PROGRESS, TRANSACTION_STATUSES.COMPLETED, true],
+    [TRANSACTION_STATUSES.IN_PROGRESS, TRANSACTION_STATUSES.CANCELLED, true],
+    [TRANSACTION_STATUSES.PENDING, TRANSACTION_STATUSES.COMPLETED, false],
+    [TRANSACTION_STATUSES.IN_PROGRESS, TRANSACTION_STATUSES.IN_PROGRESS, false],
+    [TRANSACTION_STATUSES.COMPLETED, TRANSACTION_STATUSES.CANCELLED, false],
+    [TRANSACTION_STATUSES.CANCELLED, TRANSACTION_STATUSES.IN_PROGRESS, false]
+  ] as const)("validates transition %s -> %s", async (fromStatus, toStatus, allowed) => {
+    const { repository, service } = setup();
+    repository.findForStatus.mockResolvedValue({
+      id: 100n,
+      transactionType: TRANSACTION_TYPES.DELIVERY_EXCHANGE,
+      status: fromStatus,
+      items: [{ productId: 42n, quantity: 2 }]
+    });
+    repository.findDetail.mockResolvedValue(statusDetail(toStatus));
+
+    const operation = service.changeStatus("100", { status: toStatus }, user);
+    if (allowed) {
+      await expect(operation).resolves.toMatchObject({ status: toStatus });
+      expect(repository.claimStatus).toHaveBeenCalledOnce();
+    } else {
+      await expect(operation).rejects.toMatchObject({ code: "INVALID_STATUS_TRANSITION" });
+      expect(repository.claimStatus).not.toHaveBeenCalled();
+    }
   });
 });
