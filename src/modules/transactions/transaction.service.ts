@@ -9,6 +9,7 @@ import {
   TRANSACTION_TYPES,
   type TransactionStatus
 } from "../../constants/transaction.constants";
+import { RETURNABLE_LOAN_STATUSES } from "../../constants/loan.constants";
 import { AppError } from "../../shared/errors/app-error";
 import { ERROR_CODES } from "../../shared/errors/error-codes";
 import type { AuthenticatedRequestUser } from "../../shared/types/auth.types";
@@ -21,6 +22,9 @@ import {
   type Clock
 } from "../../shared/utils/date";
 import { mapTransactionDetail, mapTransactionSummary } from "./transaction.mapper";
+import { mapLoanDetail, mapReturnTransaction } from "../loans/loan.mapper";
+import { PrismaLoanRepository } from "../loans/loan.repository";
+import type { LoanRepository } from "../loans/loan.types";
 import { deriveTransactionItemPricing } from "./transaction.pricing";
 import { PrismaTransactionRepository, PrismaTransactionRunner } from "./transaction.repository";
 import type {
@@ -34,13 +38,19 @@ import type {
   PreparedTransactionItem,
   TransactionDetailDto,
   TransactionRepository,
-  TransactionRunner
+  TransactionRunner,
+  ReturnCylinderWorkflowInput,
+  ReturnCylinderWorkflowResult
 } from "./transaction.types";
 
 const transactionNotFound = () => new AppError(404, ERROR_CODES.NOT_FOUND, "Transaction not found");
 const insufficientStock = () => new AppError(409, ERROR_CODES.INSUFFICIENT_STOCK, "Insufficient product stock");
 const invalidTransition = (from: string, to: string) =>
   new AppError(409, ERROR_CODES.INVALID_STATUS_TRANSITION, `Cannot change transaction status from ${from} to ${to}`);
+const loanNotFound = () => new AppError(404, ERROR_CODES.NOT_FOUND, "Loan not found");
+const loanConflict = (message: string) => new AppError(409, ERROR_CODES.CONFLICT, message);
+const insufficientLoanedInventory = () =>
+  new AppError(409, ERROR_CODES.INSUFFICIENT_STOCK, "Insufficient loaned inventory");
 
 function aggregateQuantities(items: Array<{ productId: bigint; quantity: number }>): Map<bigint, number> {
   const quantities = new Map<bigint, number>();
@@ -56,7 +66,8 @@ export class TransactionService {
   constructor(
     private readonly repository: TransactionRepository = new PrismaTransactionRepository(),
     private readonly transactions: TransactionRunner = new PrismaTransactionRunner(),
-    private readonly clock: Clock = systemClock
+    private readonly clock: Clock = systemClock,
+    private readonly loanRepository: LoanRepository = new PrismaLoanRepository()
   ) {}
 
   async list(input: ListTransactionsInput) {
@@ -262,5 +273,99 @@ export class TransactionService {
 
   cancel(transactionId: string, input: CancelTransactionInput, currentUser: AuthenticatedRequestUser) {
     return this.changeStatus(transactionId, { status: TRANSACTION_STATUSES.CANCELLED, note: input.note }, currentUser);
+  }
+
+  async returnCylinder(
+    input: ReturnCylinderWorkflowInput,
+    currentUser: AuthenticatedRequestUser
+  ): Promise<ReturnCylinderWorkflowResult> {
+    try {
+      return await this.transactions.run(async (client) => {
+        const loanId = BigInt(input.loanId);
+        const source = await this.loanRepository.findReturnSource(loanId, client);
+        if (!source) throw loanNotFound();
+        if (!RETURNABLE_LOAN_STATUSES.includes(source.loanStatus as (typeof RETURNABLE_LOAN_STATUSES)[number])) {
+          throw loanConflict(`Loan cannot be returned from status ${source.loanStatus}`);
+        }
+        const remainingQuantity = source.quantity - source.returnedQuantity;
+        if (input.quantity > remainingQuantity) {
+          throw loanConflict("Return quantity exceeds remaining loan quantity");
+        }
+
+        const now = this.clock.now();
+        const businessDate = bangkokBusinessDate(now);
+        const claimed = await this.loanRepository.claimReturn(loanId, input.quantity, businessDate, client);
+        if (!claimed) {
+          const current = await this.loanRepository.findReturnSource(loanId, client);
+          if (!current) throw loanNotFound();
+          if (!RETURNABLE_LOAN_STATUSES.includes(current.loanStatus as (typeof RETURNABLE_LOAN_STATUSES)[number])) {
+            throw loanConflict(`Loan cannot be returned from status ${current.loanStatus}`);
+          }
+          if (input.quantity > current.quantity - current.returnedQuantity) {
+            throw loanConflict("Return quantity exceeds remaining loan quantity");
+          }
+          throw loanConflict("Loan return was already claimed by another request");
+        }
+
+        await this.repository.acquireDailyLock(businessDate, client);
+        const sequence = await this.repository.nextTransactionSequence(businessDate, client);
+        const zero = new Prisma.Decimal(0);
+        const created = await this.repository.create({
+          transactionNo: `TX-${businessDate.replaceAll("-", "")}-${String(sequence).padStart(4, "0")}`,
+          transactionType: TRANSACTION_TYPES.RETURN_CYLINDER,
+          status: TRANSACTION_STATUSES.COMPLETED,
+          queueDate: null,
+          queueNo: null,
+          customerName: source.customerNameSnapshot,
+          customerPhone: source.customerPhoneSnapshot,
+          customerAddress: source.customerAddressSnapshot,
+          totalAmount: zero,
+          note: input.note ?? null,
+          createdBy: BigInt(currentUser.id),
+          completedAt: now,
+          changedAt: now,
+          initialStatusLogNote: input.note ?? null,
+          items: [{
+            productId: source.productId,
+            sourceLoanId: source.id,
+            productBrandSnapshot: source.transactionItem.productBrandSnapshot,
+            productWeightSnapshot: source.transactionItem.productWeightSnapshot,
+            quantity: input.quantity,
+            unitPrice: zero,
+            costPrice: source.transactionItem.costPrice,
+            lineTotal: zero,
+            itemAction: ITEM_ACTION_BY_TRANSACTION_TYPE[TRANSACTION_TYPES.RETURN_CYLINDER],
+            note: input.note ?? null,
+            expectedReturnDate: null,
+            depositAmount: zero
+          }]
+        }, client);
+
+        if (!await this.repository.applyLoanReturn(source.productId, input.quantity, client)) {
+          throw insufficientLoanedInventory();
+        }
+        await this.repository.createMovements(created.id, [{
+          productId: source.productId,
+          movementType: INVENTORY_MOVEMENT_TYPES.LOAN_RETURN,
+          quantity: input.quantity,
+          note: input.note ?? null
+        }], client);
+
+        const [transaction, loan] = await Promise.all([
+          this.repository.findDetail(created.id, client),
+          this.loanRepository.findDetail(source.id, client)
+        ]);
+        if (!transaction || !loan) throw new Error("Created loan return could not be read");
+        return {
+          transaction: mapReturnTransaction(mapTransactionDetail(transaction)),
+          loan: mapLoanDetail(loan, businessDate)
+        };
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw loanConflict("Could not allocate a unique return transaction number");
+      }
+      throw error;
+    }
   }
 }

@@ -128,7 +128,7 @@ src/
 - [x] Repository records ที่ยังใช้ `bigint`, `Decimal`, `Date` ภายใน
 - [x] Public DTOs ที่ใช้ string IDs, decimal strings และ ISO timestamps
 - [x] `TransactionRepository`, `TransactionRunner`, `Clock` interfaces สำหรับ dependency injection
-- [ ] Internal workflow inputs สำหรับ loan return ในอนาคต โดยไม่ expose ผ่าน public create schema
+- [x] Internal workflow inputs สำหรับ loan return โดยไม่ expose ผ่าน public create schema
 
 - [x] แยก request types ออกจาก response types ที่มี server-generated fields และ snapshots
 
@@ -254,11 +254,11 @@ Validation rules:
 ### 7.4 Atomic inventory update
 
 - [x] Aggregate required quantity ต่อ product ก่อนเปลี่ยน balance
-- [ ] Implement conditional atomic inventory updates ต่อไปนี้
+- [x] Implement conditional atomic inventory updates ต่อไปนี้
 
 - [x] `FULL_OUT`/exchange/buy: update เฉพาะ row ที่ `fullQty >= requiredQty`
 - [x] `LOAN_OUT`: ลด `fullQty` และเพิ่ม `loanedQty` ใน atomic statement เดียว
-- [ ] `LOAN_RETURN`: ลด `loanedQty` และเพิ่ม `emptyQty` ใน atomic statement เดียว
+- [x] `LOAN_RETURN`: ลด `loanedQty` และเพิ่ม `emptyQty` ใน atomic statement เดียว
 - [x] Exchange completion: ลด `fullQty` และเพิ่ม `emptyQty` ใน atomic statement เดียว
 
 - [x] Throw `INSUFFICIENT_STOCK` และ rollback เมื่อ affected row count ไม่ครบ
@@ -476,7 +476,7 @@ apiRouter.use("/transactions", transactionRouter)
 
 - [x] รัน `npm run prisma:generate`
 - [x] รัน `npm run build`
-- [x] รัน `npm test` — 77 tests passed; database integration tests 5 scenarios passed
+- [x] รัน `npm test` — 100 tests passed; transaction database integration 5 scenarios และ loan database integration 5 scenarios passed
 - [x] รัน `npm run lint`
 
 จากนั้นรัน database-backed integration tests และ smoke tests:

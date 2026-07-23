@@ -118,6 +118,7 @@ export class PrismaTransactionRepository implements TransactionRepository {
         items: {
           create: input.items.map((item) => ({
             productId: item.productId,
+            sourceLoanId: item.sourceLoanId ?? null,
             productBrandSnapshot: item.productBrandSnapshot,
             productWeightSnapshot: item.productWeightSnapshot,
             quantity: item.quantity,
@@ -133,7 +134,8 @@ export class PrismaTransactionRepository implements TransactionRepository {
             fromStatus: null,
             toStatus: input.status,
             changedBy: input.createdBy,
-            changedAt: input.changedAt
+            changedAt: input.changedAt,
+            note: input.initialStatusLogNote ?? null
           }
         }
       },
@@ -164,6 +166,15 @@ export class PrismaTransactionRepository implements TransactionRepository {
       UPDATE inventory_balances
       SET full_qty = full_qty - ${quantity}, loaned_qty = loaned_qty + ${quantity}, updated_at = NOW()
       WHERE product_id = ${productId} AND full_qty >= ${quantity}
+    `;
+    return affected === 1;
+  }
+
+  async applyLoanReturn(productId: bigint, quantity: number, client: DatabaseClient): Promise<boolean> {
+    const affected = await client.$executeRaw`
+      UPDATE inventory_balances
+      SET loaned_qty = loaned_qty - ${quantity}, empty_qty = empty_qty + ${quantity}, updated_at = NOW()
+      WHERE product_id = ${productId} AND loaned_qty >= ${quantity}
     `;
     return affected === 1;
   }

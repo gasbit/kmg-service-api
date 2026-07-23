@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 
 import type { InventoryMovementType } from "../../constants/inventory.constants";
 import type { ItemAction, TransactionStatus, TransactionType } from "../../constants/transaction.constants";
+import type { LoanDetailDto, ReturnTransactionDto } from "../loans/loan.types";
 
 export type DatabaseClient = Prisma.TransactionClient;
 
@@ -87,6 +88,7 @@ export interface WorkflowProduct {
 
 export interface PreparedTransactionItem {
   productId: bigint;
+  sourceLoanId?: bigint | null;
   productBrandSnapshot: string;
   productWeightSnapshot: Prisma.Decimal;
   quantity: number;
@@ -113,6 +115,7 @@ export interface CreateTransactionRecordInput {
   createdBy: bigint;
   completedAt: Date | null;
   changedAt: Date;
+  initialStatusLogNote?: string | null;
   items: PreparedTransactionItem[];
 }
 
@@ -156,6 +159,7 @@ export interface TransactionRepository {
   applyExchangeStock(productId: bigint, quantity: number, client: DatabaseClient): Promise<boolean>;
   applyFullOut(productId: bigint, quantity: number, client: DatabaseClient): Promise<boolean>;
   applyLoanOut(productId: bigint, quantity: number, client: DatabaseClient): Promise<boolean>;
+  applyLoanReturn(productId: bigint, quantity: number, client: DatabaseClient): Promise<boolean>;
   createMovements(transactionId: bigint, movements: Array<{ productId: bigint; movementType: InventoryMovementType; quantity: number; note: string | null }>, client: DatabaseClient): Promise<void>;
   createLoans(loans: CreateLoanInput[], client: DatabaseClient): Promise<void>;
   findForStatus(transactionId: bigint, client: DatabaseClient): Promise<TransactionForStatus | null>;
@@ -165,6 +169,17 @@ export interface TransactionRepository {
 
 export interface TransactionRunner {
   run<T>(work: (client: DatabaseClient) => Promise<T>): Promise<T>;
+}
+
+export interface ReturnCylinderWorkflowInput {
+  loanId: string;
+  quantity: number;
+  note?: string;
+}
+
+export interface ReturnCylinderWorkflowResult {
+  transaction: ReturnTransactionDto;
+  loan: LoanDetailDto;
 }
 
 export type RootDatabaseClient = PrismaClient;

@@ -47,6 +47,7 @@ function detailFrom(input: CreateTransactionRecordInput, status = input.status):
       id: BigInt(200 + index),
       transactionId: 100n,
       productId: item.productId,
+      sourceLoanId: item.sourceLoanId ?? null,
       productBrandSnapshot: item.productBrandSnapshot,
       productWeightSnapshot: item.productWeightSnapshot,
       quantity: item.quantity,

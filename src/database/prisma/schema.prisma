@@ -132,6 +132,7 @@ model TransactionItem {
   id                    BigInt  @id @default(autoincrement())
   transactionId         BigInt  @map("transaction_id")
   productId             BigInt  @map("product_id")
+  sourceLoanId          BigInt? @map("source_loan_id")
   productBrandSnapshot  String  @map("product_brand_snapshot") @db.VarChar(100)
   productWeightSnapshot Decimal @map("product_weight_snapshot") @db.Decimal(10, 2)
   quantity              Int
@@ -141,12 +142,14 @@ model TransactionItem {
   itemAction            String  @map("item_action") @db.VarChar(50)
   note                  String? @db.Text
 
-  transaction  Transaction   @relation(fields: [transactionId], references: [id])
-  product      Product       @relation(fields: [productId], references: [id])
-  cylinderLoan CylinderLoan?
+  transaction          Transaction   @relation(fields: [transactionId], references: [id])
+  product              Product       @relation(fields: [productId], references: [id])
+  borrowedCylinderLoan CylinderLoan? @relation("BorrowedCylinderLoan")
+  sourceLoan           CylinderLoan? @relation("LoanReturnItems", fields: [sourceLoanId], references: [id])
 
   @@index([transactionId])
   @@index([productId])
+  @@index([sourceLoanId])
   @@map("transaction_items")
 }
 
@@ -187,10 +190,11 @@ model CylinderLoan {
   createdAt               DateTime  @default(now()) @map("created_at")
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
-  transaction     Transaction     @relation(fields: [transactionId], references: [id])
-  transactionItem TransactionItem @relation(fields: [transactionItemId], references: [id])
-  customer        Customer?       @relation(fields: [customerId], references: [id])
-  product         Product         @relation(fields: [productId], references: [id])
+  transaction     Transaction       @relation(fields: [transactionId], references: [id])
+  transactionItem TransactionItem   @relation("BorrowedCylinderLoan", fields: [transactionItemId], references: [id])
+  returnItems     TransactionItem[] @relation("LoanReturnItems")
+  customer        Customer?         @relation(fields: [customerId], references: [id])
+  product         Product           @relation(fields: [productId], references: [id])
 
   @@index([loanStatus], map: "idx_loans_status")
   @@index([transactionId])
