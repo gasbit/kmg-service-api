@@ -284,6 +284,82 @@ describe("TransactionService create workflows", () => {
 });
 
 describe("TransactionService status workflows", () => {
+  it("returns a queue-specific not-found error when the scoped target is missing", async () => {
+    const { repository, service } = setup();
+    repository.findForStatus.mockResolvedValue(null);
+    await expect(service.changeQueueStatus(
+      "999",
+      { status: TRANSACTION_STATUSES.IN_PROGRESS },
+      user
+    )).rejects.toMatchObject({
+      statusCode: 404,
+      code: "NOT_FOUND",
+      message: "Queue transaction not found"
+    });
+  });
+
+  it("rejects non-delivery and incomplete queue identities on the queue-scoped path", async () => {
+    const { repository, service } = setup();
+    repository.findForStatus.mockResolvedValue({
+      id: 100n,
+      transactionType: TRANSACTION_TYPES.WALK_IN_EXCHANGE,
+      status: TRANSACTION_STATUSES.PENDING,
+      queueDate: null,
+      queueNo: null,
+      items: [{ productId: 42n, quantity: 1 }]
+    });
+    await expect(service.changeQueueStatus(
+      "100",
+      { status: TRANSACTION_STATUSES.IN_PROGRESS },
+      user
+    )).rejects.toMatchObject({
+      statusCode: 404,
+      code: "NOT_FOUND",
+      message: "Queue transaction not found"
+    });
+    expect(repository.claimStatus).not.toHaveBeenCalled();
+
+    repository.findForStatus.mockResolvedValue({
+      id: 100n,
+      transactionType: TRANSACTION_TYPES.DELIVERY_EXCHANGE,
+      status: TRANSACTION_STATUSES.PENDING,
+      queueDate: null,
+      queueNo: null,
+      items: [{ productId: 42n, quantity: 1 }]
+    });
+    await expect(service.changeQueueStatus(
+      "100",
+      { status: TRANSACTION_STATUSES.IN_PROGRESS },
+      user
+    )).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(repository.claimStatus).not.toHaveBeenCalled();
+  });
+
+  it("uses the shared status workflow for a queue-scoped transition", async () => {
+    const { repository, service } = setup();
+    repository.findForStatus.mockResolvedValue({
+      id: 100n,
+      transactionType: TRANSACTION_TYPES.DELIVERY_EXCHANGE,
+      status: TRANSACTION_STATUSES.PENDING,
+      queueDate: new Date("2026-07-22T00:00:00.000Z"),
+      queueNo: 1,
+      items: [{ productId: 42n, quantity: 1 }]
+    });
+    repository.findDetail.mockResolvedValue(statusDetail(TRANSACTION_STATUSES.IN_PROGRESS));
+    await expect(service.changeQueueStatus(
+      "100",
+      { status: TRANSACTION_STATUSES.IN_PROGRESS },
+      user
+    )).resolves.toMatchObject({
+      status: TRANSACTION_STATUSES.IN_PROGRESS,
+      queueDate: "2026-07-22",
+      queueNo: 1
+    });
+    expect(repository.claimStatus).toHaveBeenCalledOnce();
+    expect(repository.createStatusLog).toHaveBeenCalledOnce();
+    expect(repository.applyExchangeStock).not.toHaveBeenCalled();
+  });
+
   it("rejects a transition that skips IN_PROGRESS", async () => {
     const { repository, service } = setup();
     repository.findForStatus.mockResolvedValue({

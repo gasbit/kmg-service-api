@@ -11,6 +11,7 @@
     "test": "vitest run src",
     "test:transactions:integration": "tsx src/tests/run-transaction-integration.ts",
     "test:loans:integration": "tsx src/tests/run-loan-integration.ts",
+    "test:queues:integration": "tsx src/tests/run-queue-integration.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx src/database/seeds/seed.ts"

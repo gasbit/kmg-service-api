@@ -214,6 +214,8 @@ export class PrismaTransactionRepository implements TransactionRepository {
         id: true,
         transactionType: true,
         status: true,
+        queueDate: true,
+        queueNo: true,
         items: { select: { productId: true, quantity: true } }
       }
     });

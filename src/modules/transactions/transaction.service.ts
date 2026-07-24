@@ -44,6 +44,7 @@ import type {
 } from "./transaction.types";
 
 const transactionNotFound = () => new AppError(404, ERROR_CODES.NOT_FOUND, "Transaction not found");
+const queueTransactionNotFound = () => new AppError(404, ERROR_CODES.NOT_FOUND, "Queue transaction not found");
 const insufficientStock = () => new AppError(409, ERROR_CODES.INSUFFICIENT_STOCK, "Insufficient product stock");
 const invalidTransition = (from: string, to: string) =>
   new AppError(409, ERROR_CODES.INVALID_STATUS_TRANSITION, `Cannot change transaction status from ${from} to ${to}`);
@@ -230,11 +231,42 @@ export class TransactionService {
     }
   }
 
-  async changeStatus(transactionId: string, input: ChangeTransactionStatusInput, currentUser: AuthenticatedRequestUser): Promise<TransactionDetailDto> {
+  changeStatus(
+    transactionId: string,
+    input: ChangeTransactionStatusInput,
+    currentUser: AuthenticatedRequestUser
+  ): Promise<TransactionDetailDto> {
+    return this.changeStatusWithScope(transactionId, input, currentUser, false);
+  }
+
+  changeQueueStatus(
+    transactionId: string,
+    input: ChangeTransactionStatusInput,
+    currentUser: AuthenticatedRequestUser
+  ): Promise<TransactionDetailDto> {
+    return this.changeStatusWithScope(transactionId, input, currentUser, true);
+  }
+
+  private async changeStatusWithScope(
+    transactionId: string,
+    input: ChangeTransactionStatusInput,
+    currentUser: AuthenticatedRequestUser,
+    requireDeliveryQueue: boolean
+  ): Promise<TransactionDetailDto> {
     const record = await this.transactions.run(async (client) => {
       const id = BigInt(transactionId);
       const current = await this.repository.findForStatus(id, client);
-      if (!current) throw transactionNotFound();
+      if (!current) throw requireDeliveryQueue ? queueTransactionNotFound() : transactionNotFound();
+      if (
+        requireDeliveryQueue
+        && (
+          current.transactionType !== TRANSACTION_TYPES.DELIVERY_EXCHANGE
+          || current.queueDate === null
+          || current.queueNo === null
+        )
+      ) {
+        throw queueTransactionNotFound();
+      }
       if (!isTransactionStatus(current.status) || !ALLOWED_STATUS_TRANSITIONS[current.status].includes(input.status)) {
         throw invalidTransition(current.status, input.status);
       }

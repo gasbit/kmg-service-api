@@ -137,6 +137,8 @@ export interface TransactionForStatus {
   id: bigint;
   transactionType: string;
   status: string;
+  queueDate: Date | null;
+  queueNo: number | null;
   items: Array<{ productId: bigint; quantity: number }>;
 }
 
