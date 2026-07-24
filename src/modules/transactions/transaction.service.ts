@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client";
 
-import { INVENTORY_MOVEMENT_TYPES, type InventoryMovementType } from "../../constants/inventory.constants";
+import {
+  INVENTORY_MOVEMENT_TYPES,
+  INVENTORY_WORKFLOWS_ENABLED,
+  type InventoryMovementType
+} from "../../constants/inventory.constants";
 import {
   ALLOWED_STATUS_TRANSITIONS,
   INITIAL_STATUS_BY_TRANSACTION_TYPE,
@@ -185,34 +189,36 @@ export class TransactionService {
   ): Promise<void> {
     if (transactionType === TRANSACTION_TYPES.DELIVERY_EXCHANGE) return;
 
-    const quantities = aggregateQuantities(items);
-    for (const [productId, quantity] of quantities) {
-      const updated = transactionType === TRANSACTION_TYPES.WALK_IN_EXCHANGE
-        ? await this.repository.applyExchangeStock(productId, quantity, client)
-        : transactionType === TRANSACTION_TYPES.BORROW_CYLINDER
-          ? await this.repository.applyLoanOut(productId, quantity, client)
-          : await this.repository.applyFullOut(productId, quantity, client);
-      if (!updated) throw insufficientStock();
-    }
-
-    const movements: Array<{ productId: bigint; movementType: InventoryMovementType; quantity: number; note: string | null }> = [];
-    for (const item of items) {
-      const common = { productId: item.productId, quantity: item.quantity, note: item.note };
-      if (transactionType === TRANSACTION_TYPES.WALK_IN_EXCHANGE) {
-        movements.push(
-          { ...common, movementType: INVENTORY_MOVEMENT_TYPES.FULL_OUT },
-          { ...common, movementType: INVENTORY_MOVEMENT_TYPES.EMPTY_IN }
-        );
-      } else {
-        movements.push({
-          ...common,
-          movementType: transactionType === TRANSACTION_TYPES.BORROW_CYLINDER
-            ? INVENTORY_MOVEMENT_TYPES.LOAN_OUT
-            : INVENTORY_MOVEMENT_TYPES.FULL_OUT
-        });
+    if (INVENTORY_WORKFLOWS_ENABLED) {
+      const quantities = aggregateQuantities(items);
+      for (const [productId, quantity] of quantities) {
+        const updated = transactionType === TRANSACTION_TYPES.WALK_IN_EXCHANGE
+          ? await this.repository.applyExchangeStock(productId, quantity, client)
+          : transactionType === TRANSACTION_TYPES.BORROW_CYLINDER
+            ? await this.repository.applyLoanOut(productId, quantity, client)
+            : await this.repository.applyFullOut(productId, quantity, client);
+        if (!updated) throw insufficientStock();
       }
+
+      const movements: Array<{ productId: bigint; movementType: InventoryMovementType; quantity: number; note: string | null }> = [];
+      for (const item of items) {
+        const common = { productId: item.productId, quantity: item.quantity, note: item.note };
+        if (transactionType === TRANSACTION_TYPES.WALK_IN_EXCHANGE) {
+          movements.push(
+            { ...common, movementType: INVENTORY_MOVEMENT_TYPES.FULL_OUT },
+            { ...common, movementType: INVENTORY_MOVEMENT_TYPES.EMPTY_IN }
+          );
+        } else {
+          movements.push({
+            ...common,
+            movementType: transactionType === TRANSACTION_TYPES.BORROW_CYLINDER
+              ? INVENTORY_MOVEMENT_TYPES.LOAN_OUT
+              : INVENTORY_MOVEMENT_TYPES.FULL_OUT
+          });
+        }
+      }
+      await this.repository.createMovements(created.id, movements, client);
     }
-    await this.repository.createMovements(created.id, movements, client);
 
     if (transactionType === TRANSACTION_TYPES.BORROW_CYLINDER) {
       await this.repository.createLoans(items.map((item, index) => ({
@@ -276,7 +282,11 @@ export class TransactionService {
       const claimed = await this.repository.claimStatus(id, current.status, input.status, completedAt, client);
       if (!claimed) throw invalidTransition(current.status, input.status);
 
-      if (current.transactionType === TRANSACTION_TYPES.DELIVERY_EXCHANGE && input.status === TRANSACTION_STATUSES.COMPLETED) {
+      if (
+        INVENTORY_WORKFLOWS_ENABLED
+        && current.transactionType === TRANSACTION_TYPES.DELIVERY_EXCHANGE
+        && input.status === TRANSACTION_STATUSES.COMPLETED
+      ) {
         const quantities = aggregateQuantities(current.items);
         for (const [productId, quantity] of quantities) {
           if (!await this.repository.applyExchangeStock(productId, quantity, client)) throw insufficientStock();
@@ -373,15 +383,17 @@ export class TransactionService {
           }]
         }, client);
 
-        if (!await this.repository.applyLoanReturn(source.productId, input.quantity, client)) {
-          throw insufficientLoanedInventory();
+        if (INVENTORY_WORKFLOWS_ENABLED) {
+          if (!await this.repository.applyLoanReturn(source.productId, input.quantity, client)) {
+            throw insufficientLoanedInventory();
+          }
+          await this.repository.createMovements(created.id, [{
+            productId: source.productId,
+            movementType: INVENTORY_MOVEMENT_TYPES.LOAN_RETURN,
+            quantity: input.quantity,
+            note: input.note ?? null
+          }], client);
         }
-        await this.repository.createMovements(created.id, [{
-          productId: source.productId,
-          movementType: INVENTORY_MOVEMENT_TYPES.LOAN_RETURN,
-          quantity: input.quantity,
-          note: input.note ?? null
-        }], client);
 
         const [transaction, loan] = await Promise.all([
           this.repository.findDetail(created.id, client),

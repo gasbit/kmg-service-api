@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { INVENTORY_MOVEMENT_TYPES } from "../../constants/inventory.constants";
 import { ITEM_ACTIONS, TRANSACTION_STATUSES, TRANSACTION_TYPES, type TransactionStatus } from "../../constants/transaction.constants";
 import { AppError } from "../../shared/errors/app-error";
 import type { AuthenticatedRequestUser } from "../../shared/types/auth.types";
@@ -171,7 +170,7 @@ describe("TransactionService create workflows", () => {
     expect(repository.createMovements).not.toHaveBeenCalled();
   });
 
-  it("completes walk-in exchange with full-out and empty-in movements", async () => {
+  it("completes walk-in exchange without inventory effects while inventory is on hold", async () => {
     const { repository, service } = setup();
     await service.create({
       transactionType: TRANSACTION_TYPES.WALK_IN_EXCHANGE,
@@ -179,14 +178,11 @@ describe("TransactionService create workflows", () => {
       items: [{ productId: "42", quantity: 2 }]
     }, user);
 
-    expect(repository.applyExchangeStock).toHaveBeenCalledWith(42n, 2, expect.anything());
-    expect(repository.createMovements).toHaveBeenCalledWith(100n, [
-      expect.objectContaining({ movementType: INVENTORY_MOVEMENT_TYPES.FULL_OUT }),
-      expect.objectContaining({ movementType: INVENTORY_MOVEMENT_TYPES.EMPTY_IN })
-    ], expect.anything());
+    expect(repository.applyExchangeStock).not.toHaveBeenCalled();
+    expect(repository.createMovements).not.toHaveBeenCalled();
   });
 
-  it("creates a zero-revenue borrow, loan-out movement, and loan terms", async () => {
+  it("creates a zero-revenue borrow and loan terms without inventory effects", async () => {
     const { repository, service, createdInput } = setup();
     const result = await service.create({
       transactionType: TRANSACTION_TYPES.BORROW_CYLINDER,
@@ -196,10 +192,8 @@ describe("TransactionService create workflows", () => {
 
     expect(result.totalAmount).toBe("0.00");
     expect(createdInput()?.items[0].costPrice.toFixed(2)).toBe("330.00");
-    expect(repository.applyLoanOut).toHaveBeenCalledWith(42n, 1, expect.anything());
-    expect(repository.createMovements).toHaveBeenCalledWith(100n, [
-      expect.objectContaining({ movementType: INVENTORY_MOVEMENT_TYPES.LOAN_OUT })
-    ], expect.anything());
+    expect(repository.applyLoanOut).not.toHaveBeenCalled();
+    expect(repository.createMovements).not.toHaveBeenCalled();
     expect(repository.createLoans).toHaveBeenCalledWith([
       expect.objectContaining({
         transactionItemId: 200n,
@@ -209,7 +203,7 @@ describe("TransactionService create workflows", () => {
     ], expect.anything());
   });
 
-  it("uses full-tank price and only decreases full stock", async () => {
+  it("uses full-tank price without inventory effects", async () => {
     const { repository, service } = setup();
     const result = await service.create({
       transactionType: TRANSACTION_TYPES.BUY_FULL_TANK,
@@ -218,20 +212,19 @@ describe("TransactionService create workflows", () => {
     }, user);
 
     expect(result.totalAmount).toBe("4900.00");
-    expect(repository.applyFullOut).toHaveBeenCalledWith(42n, 2, expect.anything());
-    expect(repository.createMovements).toHaveBeenCalledWith(100n, [
-      expect.objectContaining({ movementType: INVENTORY_MOVEMENT_TYPES.FULL_OUT })
-    ], expect.anything());
+    expect(repository.applyFullOut).not.toHaveBeenCalled();
+    expect(repository.createMovements).not.toHaveBeenCalled();
   });
 
-  it("raises INSUFFICIENT_STOCK before movements are written", async () => {
+  it("does not validate stock while inventory is on hold", async () => {
     const { repository, service } = setup();
     repository.applyFullOut.mockResolvedValue(false);
     await expect(service.create({
       transactionType: TRANSACTION_TYPES.BUY_FULL_TANK,
       customerName: "Customer",
       items: [{ productId: "42", quantity: 2 }]
-    }, user)).rejects.toMatchObject({ code: "INSUFFICIENT_STOCK" });
+    }, user)).resolves.toMatchObject({ status: TRANSACTION_STATUSES.COMPLETED });
+    expect(repository.applyFullOut).not.toHaveBeenCalled();
     expect(repository.createMovements).not.toHaveBeenCalled();
   });
 
@@ -373,7 +366,7 @@ describe("TransactionService status workflows", () => {
     expect(repository.claimStatus).not.toHaveBeenCalled();
   });
 
-  it("claims delivery completion before applying exchange inventory effects", async () => {
+  it("completes delivery without inventory effects while inventory is on hold", async () => {
     const { repository, service } = setup();
     repository.findForStatus.mockResolvedValue({
       id: 100n,
@@ -410,12 +403,9 @@ describe("TransactionService status workflows", () => {
       }]
     }, TRANSACTION_STATUSES.COMPLETED));
     const result = await service.changeStatus("100", { status: TRANSACTION_STATUSES.COMPLETED, note: "Delivered" }, user);
-    expect(repository.claimStatus).toHaveBeenCalledBefore(repository.applyExchangeStock);
-    expect(repository.applyExchangeStock).toHaveBeenCalledWith(42n, 2, expect.anything());
-    expect(repository.createMovements).toHaveBeenCalledWith(100n, expect.arrayContaining([
-      expect.objectContaining({ movementType: INVENTORY_MOVEMENT_TYPES.FULL_OUT }),
-      expect.objectContaining({ movementType: INVENTORY_MOVEMENT_TYPES.EMPTY_IN })
-    ]), expect.anything());
+    expect(repository.claimStatus).toHaveBeenCalled();
+    expect(repository.applyExchangeStock).not.toHaveBeenCalled();
+    expect(repository.createMovements).not.toHaveBeenCalled();
     expect(repository.createStatusLog).toHaveBeenCalled();
     expect(result.status).toBe(TRANSACTION_STATUSES.COMPLETED);
   });

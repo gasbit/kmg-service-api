@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 
-import { INVENTORY_MOVEMENT_TYPES } from "../../constants/inventory.constants";
 import { LOAN_STATUSES } from "../../constants/loan.constants";
 import { ITEM_ACTIONS, TRANSACTION_STATUSES, TRANSACTION_TYPES } from "../../constants/transaction.constants";
 import type { AuthenticatedRequestUser } from "../../shared/types/auth.types";
@@ -195,13 +194,8 @@ describe("TransactionService loan return workflow", () => {
         note: "คืนถัง"
       }]
     });
-    expect(repository.applyLoanReturn).toHaveBeenCalledWith(42n, 1, expect.anything());
-    expect(repository.createMovements).toHaveBeenCalledWith(9010n, [{
-      productId: 42n,
-      movementType: INVENTORY_MOVEMENT_TYPES.LOAN_RETURN,
-      quantity: 1,
-      note: "คืนถัง"
-    }], expect.anything());
+    expect(repository.applyLoanReturn).not.toHaveBeenCalled();
+    expect(repository.createMovements).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       transaction: {
         transactionType: TRANSACTION_TYPES.RETURN_CYLINDER,
@@ -231,13 +225,11 @@ describe("TransactionService loan return workflow", () => {
       });
   });
 
-  it("rejects missing loaned inventory before creating a movement", async () => {
+  it("does not validate loaned inventory while inventory is on hold", async () => {
     const { repository, service } = setup({ stock: false });
     await expect(service.returnCylinder({ loanId: "301", quantity: 1 }, user))
-      .rejects.toMatchObject({
-        code: "INSUFFICIENT_STOCK",
-        message: "Insufficient loaned inventory"
-      });
+      .resolves.toMatchObject({ loan: { id: "301" } });
+    expect(repository.applyLoanReturn).not.toHaveBeenCalled();
     expect(repository.createMovements).not.toHaveBeenCalled();
   });
 
